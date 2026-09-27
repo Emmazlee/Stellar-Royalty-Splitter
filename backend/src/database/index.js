@@ -183,7 +183,7 @@ export {
   getEarningsForWeek,
 } from "./email-digest.js";
 
-// Disputes / ticket system (#607)
+// Disputes / ticket system (#607, enhanced #961)
 export {
   createDispute,
   getDisputeByTicketId,
@@ -194,6 +194,14 @@ export {
   updateDisputeStatus,
   addDisputeComment,
   getDisputeComments,
+  addDisputeEvidence,
+  getDisputeEvidence,
+  storeDisputeAnalysis,
+  getDisputeAnalysis,
+  addMediationRecommendation,
+  getMediationRecommendations,
+  updateMediationRecommendationStatus,
+  getDisputeStatistics,
 } from "./disputes.js";
 
 // API key rate-limit usage tracking (#608)
@@ -337,6 +345,59 @@ export {
   voidTaxForm,
   getTaxYearSummary,
 } from "./tax-forms.js";
+
+// Reputation and trust score system (#962)
+export {
+  initializeReputationTables,
+  getOrCreateReputation,
+  recordPayoutEvent,
+  recordReputationActivity,
+  calculateTrustScore,
+  updateReputationAfterPayout,
+  getReputationDetails,
+  getTopCollaborators,
+  getCollaboratorsByTier,
+  countCollaboratorsByTier,
+  recalculateAllTrustScores,
+  getReputationStatistics,
+} from "./reputation.js";
+
+// Advanced search API (#971)
+export {
+  initializeSearchTables,
+  indexCollaborator,
+  indexTransaction,
+  indexDispute,
+  recordSearch,
+  searchCollaborators,
+  searchTransactions,
+  searchDisputes,
+  searchAll,
+  semanticSearch,
+  advancedSearch,
+  getSearchSuggestions,
+  getTrendingSearches,
+  getSearchStatistics,
+  rebuildSearchIndexes,
+} from "./search.js";
+
+// Zero-knowledge proof privacy system (#972)
+export {
+  initializeZKPrivacyTables,
+  storeDistributionProof,
+  getDistributionProof,
+  getDistributionProofs,
+  markProofVerified,
+  storeNullifier,
+  isNullifierUsed,
+  issueAnonymousCredential,
+  getAnonymousCredential,
+  getCredentialsByWallet,
+  markCredentialUsed,
+  revokeCredential,
+  getZKAuditLog,
+  getZKPrivacyStatistics,
+} from "./zk-privacy.js";
 
 // Default export for backwards compatibility
 import { db } from "./core.js";

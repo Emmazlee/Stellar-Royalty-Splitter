@@ -585,6 +585,231 @@ export function initializeDatabase() {
           ON tax_forms(status, taxYear);
       `,
     },
+    {
+      // #962: Collaborator reputation and trust score system
+      version: 19,
+      sql: `
+        CREATE TABLE IF NOT EXISTS collaborator_reputation (
+          walletAddress TEXT PRIMARY KEY,
+          totalPayoutsReceived INTEGER DEFAULT 0,
+          totalAmountReceived TEXT DEFAULT '0',
+          firstPayoutDate DATETIME,
+          lastPayoutDate DATETIME,
+          consecutiveMonthsActive INTEGER DEFAULT 0,
+          missedPayoutOpportunities INTEGER DEFAULT 0,
+          averagePayoutAmount TEXT DEFAULT '0',
+          trustScore INTEGER DEFAULT 0 CHECK(trustScore >= 0 AND trustScore <= 100),
+          reputationTier TEXT DEFAULT 'newcomer' CHECK(reputationTier IN ('newcomer', 'bronze', 'silver', 'gold', 'platinum')),
+          lastCalculated DATETIME DEFAULT CURRENT_TIMESTAMP,
+          createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS reputation_payout_events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          walletAddress TEXT NOT NULL,
+          contractId TEXT NOT NULL,
+          amount TEXT NOT NULL,
+          payoutDate DATETIME NOT NULL,
+          onTime INTEGER DEFAULT 1,
+          FOREIGN KEY(walletAddress) REFERENCES collaborator_reputation(walletAddress) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS reputation_activities (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          walletAddress TEXT NOT NULL,
+          activityType TEXT NOT NULL CHECK(activityType IN ('dispute_opened', 'dispute_resolved', 'project_completed', 'endorsed_by_peer', 'flagged')),
+          impactScore INTEGER NOT NULL DEFAULT 0,
+          details TEXT,
+          timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY(walletAddress) REFERENCES collaborator_reputation(walletAddress) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_reputation_wallet ON collaborator_reputation(walletAddress);
+        CREATE INDEX IF NOT EXISTS idx_reputation_tier ON collaborator_reputation(reputationTier);
+        CREATE INDEX IF NOT EXISTS idx_reputation_score ON collaborator_reputation(trustScore);
+        CREATE INDEX IF NOT EXISTS idx_payout_events_wallet ON reputation_payout_events(walletAddress);
+        CREATE INDEX IF NOT EXISTS idx_payout_events_date ON reputation_payout_events(payoutDate);
+        CREATE INDEX IF NOT EXISTS idx_reputation_activities_wallet ON reputation_activities(walletAddress);
+        CREATE INDEX IF NOT EXISTS idx_reputation_activities_type ON reputation_activities(activityType);
+      `,
+    },
+    {
+      // #961: Advanced dispute resolution with AI-powered mediation
+      version: 20,
+      sql: `
+        -- Evidence collection for disputes
+        CREATE TABLE IF NOT EXISTS dispute_evidence (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          disputeId INTEGER NOT NULL,
+          submittedBy TEXT NOT NULL,
+          evidenceType TEXT NOT NULL CHECK(evidenceType IN ('document', 'transaction_proof', 'screenshot', 'other')),
+          fileUrl TEXT NOT NULL,
+          description TEXT,
+          metadata TEXT NOT NULL DEFAULT '{}',
+          createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY(disputeId) REFERENCES disputes(id) ON DELETE CASCADE
+        );
+
+        -- AI analysis results for disputes
+        CREATE TABLE IF NOT EXISTS dispute_ai_analysis (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          disputeId INTEGER NOT NULL,
+          analysisType TEXT NOT NULL CHECK(analysisType IN ('transaction_pattern', 'evidence_review', 'sentiment_analysis', 'fraud_detection')),
+          findings TEXT NOT NULL DEFAULT '{}',
+          confidenceScore INTEGER NOT NULL CHECK(confidenceScore >= 0 AND confidenceScore <= 100),
+          recommendations TEXT NOT NULL DEFAULT '{}',
+          createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY(disputeId) REFERENCES disputes(id) ON DELETE CASCADE
+        );
+
+        -- Mediation recommendations
+        CREATE TABLE IF NOT EXISTS dispute_mediation_recommendations (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          disputeId INTEGER NOT NULL,
+          recommendationType TEXT NOT NULL CHECK(recommendationType IN ('automated', 'human_review_suggested', 'escalation_required')),
+          recommendation TEXT NOT NULL,
+          reasoning TEXT NOT NULL DEFAULT '{}',
+          priority INTEGER NOT NULL CHECK(priority >= 1 AND priority <= 5),
+          status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'implemented', 'rejected')),
+          implementedBy TEXT,
+          implementedAt DATETIME,
+          createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY(disputeId) REFERENCES disputes(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_dispute_evidence_dispute ON dispute_evidence(disputeId);
+        CREATE INDEX IF NOT EXISTS idx_dispute_evidence_submitted_by ON dispute_evidence(submittedBy);
+        CREATE INDEX IF NOT EXISTS idx_dispute_ai_analysis_dispute ON dispute_ai_analysis(disputeId);
+        CREATE INDEX IF NOT EXISTS idx_dispute_ai_analysis_type ON dispute_ai_analysis(analysisType);
+        CREATE INDEX IF NOT EXISTS idx_dispute_mediation_dispute ON dispute_mediation_recommendations(disputeId);
+        CREATE INDEX IF NOT EXISTS idx_dispute_mediation_status ON dispute_mediation_recommendations(status);
+        CREATE INDEX IF NOT EXISTS idx_dispute_mediation_priority ON dispute_mediation_recommendations(priority DESC);
+      `,
+    },
+    {
+      // #971: Advanced search API with full-text and semantic search
+      version: 21,
+      sql: `
+        -- Full-text search index for collaborators
+        CREATE VIRTUAL TABLE IF NOT EXISTS collaborators_fts USING fts5(
+          walletAddress,
+          name,
+          email,
+          notes,
+          contractId,
+          tokenize = 'porter unicode61'
+        );
+
+        -- Full-text search index for transactions
+        CREATE VIRTUAL TABLE IF NOT EXISTS transactions_fts USING fts5(
+          txHash,
+          contractId,
+          type,
+          initiatorAddress,
+          tokenId,
+          notes,
+          collaboratorAddresses,
+          tokenize = 'porter unicode61'
+        );
+
+        -- Full-text search index for disputes
+        CREATE VIRTUAL TABLE IF NOT EXISTS disputes_fts USING fts5(
+          ticketId,
+          walletAddress,
+          contractId,
+          category,
+          description,
+          status,
+          comments,
+          tokenize = 'porter unicode61'
+        );
+
+        -- Search history and analytics
+        CREATE TABLE IF NOT EXISTS search_history (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          query TEXT NOT NULL,
+          searchType TEXT NOT NULL,
+          resultsCount INTEGER NOT NULL DEFAULT 0,
+          userId TEXT,
+          timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Popular search terms
+        CREATE TABLE IF NOT EXISTS search_analytics (
+          query TEXT PRIMARY KEY,
+          searchCount INTEGER NOT NULL DEFAULT 0,
+          lastSearched DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_search_history_query ON search_history(query);
+        CREATE INDEX IF NOT EXISTS idx_search_history_user ON search_history(userId);
+        CREATE INDEX IF NOT EXISTS idx_search_history_timestamp ON search_history(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_search_analytics_count ON search_analytics(searchCount DESC);
+      `,
+    },
+    {
+      // #972: Zero-knowledge proof implementation for privacy-preserving operations
+      version: 22,
+      sql: `
+        -- Private distribution proofs
+        CREATE TABLE IF NOT EXISTS zk_distribution_proofs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          contractId TEXT NOT NULL,
+          transactionId INTEGER,
+          proofType TEXT NOT NULL DEFAULT 'private_distribution' CHECK(proofType IN ('private_distribution', 'range_proof', 'membership_proof')),
+          totalCommitment TEXT NOT NULL,
+          collaboratorCount INTEGER NOT NULL,
+          proofData TEXT NOT NULL,
+          verified INTEGER DEFAULT 0,
+          createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY(transactionId) REFERENCES transactions(id) ON DELETE SET NULL
+        );
+
+        -- Anonymous credentials for collaborators
+        CREATE TABLE IF NOT EXISTS zk_anonymous_credentials (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          credentialId TEXT NOT NULL UNIQUE,
+          walletAddress TEXT NOT NULL,
+          commitment TEXT NOT NULL,
+          attributes TEXT NOT NULL DEFAULT '{}',
+          signature TEXT NOT NULL,
+          revoked INTEGER DEFAULT 0,
+          issuedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+          expiresAt DATETIME,
+          lastUsed DATETIME
+        );
+
+        -- Nullifier registry (prevents double-spending of proofs)
+        CREATE TABLE IF NOT EXISTS zk_nullifiers (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          nullifier TEXT NOT NULL UNIQUE,
+          proofId INTEGER NOT NULL,
+          usedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY(proofId) REFERENCES zk_distribution_proofs(id) ON DELETE CASCADE
+        );
+
+        -- Privacy audit log (records proof verification events)
+        CREATE TABLE IF NOT EXISTS zk_audit_log (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          proofId INTEGER,
+          credentialId TEXT,
+          action TEXT NOT NULL CHECK(action IN ('proof_generated', 'proof_verified', 'credential_issued', 'credential_used', 'credential_revoked')),
+          result TEXT,
+          metadata TEXT,
+          timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_zk_proofs_contract ON zk_distribution_proofs(contractId);
+        CREATE INDEX IF NOT EXISTS idx_zk_proofs_transaction ON zk_distribution_proofs(transactionId);
+        CREATE INDEX IF NOT EXISTS idx_zk_proofs_type ON zk_distribution_proofs(proofType);
+        CREATE INDEX IF NOT EXISTS idx_zk_credentials_wallet ON zk_anonymous_credentials(walletAddress);
+        CREATE INDEX IF NOT EXISTS idx_zk_credentials_id ON zk_anonymous_credentials(credentialId);
+        CREATE INDEX IF NOT EXISTS idx_zk_nullifiers_nullifier ON zk_nullifiers(nullifier);
+        CREATE INDEX IF NOT EXISTS idx_zk_audit_proof ON zk_audit_log(proofId);
+        CREATE INDEX IF NOT EXISTS idx_zk_audit_credential ON zk_audit_log(credentialId);
+      `,
+    },
   ];
 
   for (const migration of migrations) {

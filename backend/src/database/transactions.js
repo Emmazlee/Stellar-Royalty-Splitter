@@ -82,6 +82,25 @@ export function addDistributionPayout(
     contractId,
     payload: { transactionId, amountReceived },
   });
+
+  // Update collaborator reputation after successful payout (#962)
+  try {
+    const { updateReputationAfterPayout } = await import("./reputation.js");
+    updateReputationAfterPayout(
+      collaboratorAddress,
+      contractId,
+      amountReceived,
+      new Date().toISOString()
+    );
+  } catch (err) {
+    // Reputation update is non-critical, log and continue
+    import("../logger.js").then(({ default: logger }) => {
+      logger.warn("Failed to update reputation after payout", {
+        collaboratorAddress,
+        error: err.message,
+      });
+    });
+  }
 }
 
 export function getTransactionCount(contractId, filters = {}) {
