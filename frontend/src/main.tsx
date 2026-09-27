@@ -14,6 +14,7 @@ import { registerServiceWorker } from "./lib/registerServiceWorker";
 import { NotificationProvider } from "./context/NotificationContext";
 import { queryClient } from "./lib/queryClient";
 import "./i18n";
+import "./styles/design-tokens.css";
 import "./modern-styles.css";
 import "./index.css";
 
