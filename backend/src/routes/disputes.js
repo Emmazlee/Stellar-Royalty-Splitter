@@ -107,6 +107,21 @@ disputesRouter.post("/", validate(disputeSubmitSchema), async (req, res, next) =
       category,
     });
 
+    // Record reputation activity for dispute opened (#962)
+    try {
+      const { recordReputationActivity } = await import("../database/reputation.js");
+      recordReputationActivity(walletAddress, "dispute_opened", -5, {
+        disputeTicketId: dispute.ticketId,
+        category,
+        contractId,
+      });
+    } catch (err) {
+      logger.warn("Failed to record reputation activity for dispute", {
+        walletAddress,
+        error: err.message,
+      });
+    }
+
     // Confirmation email — contributor must have registered an email elsewhere;
     // if req.body carries one we use it, otherwise we skip silently.
     const contributorEmail = req.body.email ?? null;
@@ -210,6 +225,23 @@ disputesRouter.patch(
         previousStatus: existing.status,
         newStatus: status,
       });
+
+      // Record reputation activity when dispute is resolved (#962)
+      if (status === "resolved" && existing.status !== "resolved") {
+        try {
+          const { recordReputationActivity } = await import("../database/reputation.js");
+          recordReputationActivity(existing.walletAddress, "dispute_resolved", 3, {
+            disputeTicketId: ticketId,
+            resolution: status,
+            adminNote,
+          });
+        } catch (err) {
+          logger.warn("Failed to record reputation activity for dispute resolution", {
+            walletAddress: existing.walletAddress,
+            error: err.message,
+          });
+        }
+      }
 
       // Notify contributor if we have a contact email on file.
       // The email_digest_subscribers table stores wallet→email mappings;
@@ -335,3 +367,151 @@ async function resolveContributorEmail(walletAddress) {
     return null;
   }
 }
+
+
+// ─── Evidence submission (#961) ────────────────────────────────────────────────
+
+disputesRouter.post("/:ticketId/evidence", async (req, res, next) => {
+  try {
+    const { ticketId } = req.params;
+    const { walletAddress, evidenceType, fileUrl, description, metadata } = req.body;
+
+    const dispute = resolveDispute(ticketId, res);
+    if (!dispute) return;
+
+    // Only the owning wallet or admin can submit evidence
+    const isOwner = dispute.walletAddress === walletAddress;
+    const isAdmin = req.headers.authorization?.startsWith("Bearer ");
+
+    if (!isOwner && !isAdmin) {
+      return sendError(res, 403, "forbidden", "You do not have permission to submit evidence for this dispute");
+    }
+
+    if (!evidenceType || !['document', 'transaction_proof', 'screenshot', 'other'].includes(evidenceType)) {
+      return sendError(res, 400, "invalid_evidence_type", "Evidence type must be one of: document, transaction_proof, screenshot, other");
+    }
+
+    if (!fileUrl) {
+      return sendError(res, 400, "missing_file_url", "fileUrl is required");
+    }
+
+    const { addDisputeEvidence } = await import("../database/disputes.js");
+    const evidence = addDisputeEvidence(
+      dispute.id,
+      walletAddress,
+      evidenceType,
+      fileUrl,
+      description || '',
+      metadata || {}
+    );
+
+    logger.info("Evidence submitted for dispute", { ticketId, evidenceId: evidence.id });
+
+    return res.status(201).json({ success: true, data: evidence });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Get evidence for a dispute (#961) ─────────────────────────────────────────
+
+disputesRouter.get("/:ticketId/evidence", async (req, res, next) => {
+  try {
+    const { ticketId } = req.params;
+
+    const dispute = resolveDispute(ticketId, res);
+    if (!dispute) return;
+
+    const { getDisputeEvidence } = await import("../database/disputes.js");
+    const evidence = getDisputeEvidence(dispute.id);
+
+    return res.json({ success: true, data: evidence });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Admin: Trigger AI analysis (#961) ─────────────────────────────────────────
+
+disputesRouter.post("/admin/:ticketId/analyze", requireAdminToken, async (req, res, next) => {
+  try {
+    const { ticketId } = req.params;
+
+    const dispute = resolveDispute(ticketId, res);
+    if (!dispute) return;
+
+    logger.info("Starting AI analysis for dispute", { ticketId });
+
+    const { analyzeDispute } = await import("../services/ai-dispute-analyzer.js");
+    const result = await analyzeDispute(ticketId);
+
+    logger.info("AI analysis completed", { ticketId, result: result.success });
+
+    return res.json({
+      success: true,
+      data: result,
+      message: "AI analysis completed successfully",
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Admin: Get AI analysis results (#961) ─────────────────────────────────────
+
+disputesRouter.get("/admin/:ticketId/analysis", requireAdminToken, async (req, res, next) => {
+  try {
+    const { ticketId } = req.params;
+
+    const dispute = resolveDispute(ticketId, res);
+    if (!dispute) return;
+
+    const { getDisputeAnalysisReport } = await import("../services/ai-dispute-analyzer.js");
+    const report = getDisputeAnalysisReport(ticketId);
+
+    return res.json({ success: true, data: report });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── Admin: Update mediation recommendation status (#961) ──────────────────────
+
+disputesRouter.patch(
+  "/admin/:ticketId/recommendations/:recommendationId",
+  requireAdminToken,
+  async (req, res, next) => {
+    try {
+      const { ticketId, recommendationId } = req.params;
+      const { status, implementedBy } = req.body;
+
+      const dispute = resolveDispute(ticketId, res);
+      if (!dispute) return;
+
+      if (!status || !['pending', 'implemented', 'rejected'].includes(status)) {
+        return sendError(res, 400, "invalid_status", "Status must be one of: pending, implemented, rejected");
+      }
+
+      const { updateMediationRecommendationStatus } = await import("../database/disputes.js");
+      const updated = updateMediationRecommendationStatus(
+        parseInt(recommendationId),
+        status,
+        implementedBy || 'admin'
+      );
+
+      if (!updated) {
+        return sendError(res, 404, "recommendation_not_found", "Recommendation not found");
+      }
+
+      logger.info("Mediation recommendation status updated", {
+        ticketId,
+        recommendationId,
+        status,
+      });
+
+      return res.json({ success: true, data: updated });
+    } catch (err) {
+      next(err);
+    }
+  }
+);

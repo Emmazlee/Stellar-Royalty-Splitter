@@ -86,6 +86,9 @@ import { smsPreferencesRouter } from "./routes/notifications/sms.js";
 import { taxReportsRouter } from "./routes/tax/reports.js";
 import { emailTemplatesRouter } from "./routes/communications/email-templates.js";
 import { sendgridWebhookRouter } from "./routes/webhooks/sendgrid.js";
+import { reputationRouter } from "./routes/reputation.js";
+import { searchRouter } from "./routes/search.js";
+import { zkPrivacyRouter } from "./routes/zk-privacy.js";
 
 // Initialize database on startup
 initializeDatabase();
@@ -456,6 +459,15 @@ app.use("/api/v1/crm/salesforce", salesforceRouter);
 
 // HubSpot CRM integration (#946)
 app.use("/api/v1/crm/hubspot", hubspotRouter);
+
+// Collaborator reputation and trust score system (#962)
+app.use("/api/v1/reputation", reputationRouter);
+
+// Advanced search API (#971)
+app.use("/api/v1/search", searchRouter);
+
+// Zero-knowledge proof privacy system (#972)
+app.use("/api/v1/zk-privacy", zkPrivacyRouter);
 
 // Admin operations (separate from /api/v1; protected by ADMIN_ROTATE_TOKEN)
 const RATE_LIMIT_ADMIN_WINDOW_MS = 60_000;
