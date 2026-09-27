@@ -1,6 +1,9 @@
 use soroban_sdk::unwrap::UnwrapOptimized;
 pub mod auth;
 mod storage;
+
+#[cfg(test)]
+mod proptest_invariants;
 pub use storage::{
     LinkedPool, MetadataBinding, MetadataRateCache, MAX_LINKED_POOLS, METADATA_CACHE_TTL_SECS,
 };
