@@ -90,6 +90,7 @@ import { sendgridWebhookRouter } from "./routes/webhooks/sendgrid.js";
 import { reputationRouter } from "./routes/reputation.js";
 import { searchRouter } from "./routes/search.js";
 import { zkPrivacyRouter } from "./routes/zk-privacy.js";
+import { stripeRouter } from "./routes/payments/stripe.js";
 
 // Initialize database on startup
 initializeDatabase();
