@@ -101,6 +101,36 @@ export function initializeDatabase() {
         );
       `,
     },
+    {
+      // #984: Performance — Query optimization and database indexing strategy
+      version: 4,
+      sql: `
+        CREATE INDEX IF NOT EXISTS idx_distribution_payouts_txId ON distribution_payouts(transactionId);
+        CREATE INDEX IF NOT EXISTS idx_distribution_payouts_collab ON distribution_payouts(collaboratorAddress, transactionId);
+        CREATE INDEX IF NOT EXISTS idx_distribution_payouts_contract ON distribution_payouts(contractId);
+        CREATE INDEX IF NOT EXISTS idx_distribution_payouts_collab_contract ON distribution_payouts(collaboratorAddress, contractId);
+        CREATE INDEX IF NOT EXISTS idx_secondary_distributions_txId ON secondary_royalty_distributions(transactionId);
+        CREATE INDEX IF NOT EXISTS idx_transactions_contract_status_time ON transactions(contractId, status, timestamp);
+        CREATE INDEX IF NOT EXISTS idx_transactions_contract_time ON transactions(contractId, timestamp DESC, id DESC);
+        CREATE INDEX IF NOT EXISTS idx_transactions_initiator_time ON transactions(initiatorAddress, timestamp DESC);
+        CREATE INDEX IF NOT EXISTS idx_secondary_sales_contract_time ON secondary_sales(contractId, timestamp DESC);
+        CREATE INDEX IF NOT EXISTS idx_secondary_distributions_contract_time ON secondary_royalty_distributions(contractId, timestamp DESC);
+        CREATE INDEX IF NOT EXISTS idx_transactions_confirmed_payouts ON transactions(contractId, timestamp) WHERE status = 'confirmed';
+        CREATE INDEX IF NOT EXISTS idx_secondary_sales_undistributed ON secondary_sales(contractId, timestamp) WHERE distributed = 0;
+        CREATE INDEX IF NOT EXISTS idx_transactions_active_holds ON transactions(contractId, hold_placed_at) WHERE hold_status = 'active';
+
+        CREATE TABLE IF NOT EXISTS earnings_summary_mv (
+          contractId TEXT PRIMARY KEY,
+          totalTransactions INTEGER NOT NULL DEFAULT 0,
+          totalDistributed TEXT NOT NULL DEFAULT '0',
+          averagePayout TEXT NOT NULL DEFAULT '0',
+          uniqueCollaborators INTEGER NOT NULL DEFAULT 0,
+          lastPayoutAt DATETIME,
+          lastRefreshedAt DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_earnings_summary_mv_refreshed ON earnings_summary_mv(lastRefreshedAt);
+      `,
+    },
   ];
 
   const applied = db

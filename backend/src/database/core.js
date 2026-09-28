@@ -811,7 +811,7 @@ export function initializeDatabase() {
       `,
     },
     {
-      // #984: Performance ÔÇö Query optimization and database indexing strategy
+      // #984: Performance — Query optimization and database indexing strategy
       version: 23,
       sql: `
         -- Foreign key indexes
@@ -854,87 +854,6 @@ export function initializeDatabase() {
           lastRefreshedAt DATETIME DEFAULT CURRENT_TIMESTAMP
         );
         CREATE INDEX IF NOT EXISTS idx_earnings_summary_mv_refreshed ON earnings_summary_mv(lastRefreshedAt);
-      `,
-    },
-    {
-      // #991: distribution schedules, batch execution tracking
-      version: 24,
-      sql: `
-        CREATE TABLE IF NOT EXISTS distribution_schedules (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          contractId TEXT NOT NULL,
-          walletAddress TEXT NOT NULL,
-          tokenId TEXT NOT NULL,
-          frequency TEXT NOT NULL CHECK(frequency IN ('weekly', 'biweekly', 'monthly')),
-          dayOfWeek INTEGER CHECK(dayOfWeek BETWEEN 0 AND 6),
-          dayOfMonth INTEGER CHECK(dayOfMonth BETWEEN 1 AND 28),
-          hourOfDay INTEGER NOT NULL DEFAULT 0 CHECK(hourOfDay BETWEEN 0 AND 23),
-          minuteOfHour INTEGER NOT NULL DEFAULT 0 CHECK(minuteOfHour BETWEEN 0 AND 59),
-          enabled INTEGER NOT NULL DEFAULT 1,
-          nextRunAt DATETIME,
-          lastRunAt DATETIME,
-          lastRunStatus TEXT CHECK(lastRunStatus IN ('success', 'failed', 'partial') OR lastRunStatus IS NULL),
-          createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE TABLE IF NOT EXISTS batch_executions (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          scheduleId INTEGER,
-          status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'running', 'completed', 'failed')),
-          totalItems INTEGER NOT NULL DEFAULT 0,
-          successCount INTEGER NOT NULL DEFAULT 0,
-          failureCount INTEGER NOT NULL DEFAULT 0,
-          startedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-          completedAt DATETIME,
-          errorMessage TEXT,
-          FOREIGN KEY(scheduleId) REFERENCES distribution_schedules(id) ON DELETE SET NULL
-        );
-        CREATE TABLE IF NOT EXISTS batch_execution_items (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          batchExecutionId INTEGER NOT NULL,
-          transactionId INTEGER,
-          contractId TEXT NOT NULL,
-          status TEXT NOT NULL CHECK(status IN ('success', 'failed', 'skipped')),
-          xdr TEXT,
-          errorMessage TEXT,
-          createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY(batchExecutionId) REFERENCES batch_executions(id) ON DELETE CASCADE,
-          FOREIGN KEY(transactionId) REFERENCES transactions(id) ON DELETE SET NULL
-        );
-        CREATE INDEX IF NOT EXISTS idx_distribution_schedules_contractId ON distribution_schedules(contractId);
-        CREATE INDEX IF NOT EXISTS idx_distribution_schedules_enabled_next ON distribution_schedules(enabled, nextRunAt);
-        CREATE INDEX IF NOT EXISTS idx_batch_executions_scheduleId ON batch_executions(scheduleId);
-        CREATE INDEX IF NOT EXISTS idx_batch_execution_items_batchId ON batch_execution_items(batchExecutionId);
-      `,
-    },
-    {
-      // #993: contract backup and disaster recovery
-      version: 25,
-      sql: `
-        CREATE TABLE IF NOT EXISTS contract_backups (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          contractId TEXT NOT NULL,
-          snapshotVersion INTEGER NOT NULL DEFAULT 1,
-          ipfsCid TEXT,
-          ipfsGatewayUrl TEXT,
-          sizeBytes INTEGER NOT NULL DEFAULT 0,
-          transactionCount INTEGER NOT NULL DEFAULT 0,
-          collaboratorCount INTEGER NOT NULL DEFAULT 0,
-          secondarySaleCount INTEGER NOT NULL DEFAULT 0,
-          auditLogCount INTEGER NOT NULL DEFAULT 0,
-          weekNumber INTEGER NOT NULL,
-          yearNumber INTEGER NOT NULL,
-          status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'uploading', 'completed', 'failed')),
-          errorMessage TEXT,
-          isRecoveryDrill INTEGER NOT NULL DEFAULT 0,
-          drillSucceeded INTEGER,
-          drillDurationMs INTEGER,
-          createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-          completedAt DATETIME
-        );
-        CREATE INDEX IF NOT EXISTS idx_contract_backups_contractId ON contract_backups(contractId);
-        CREATE INDEX IF NOT EXISTS idx_contract_backups_week ON contract_backups(contractId, yearNumber, weekNumber);
-        CREATE INDEX IF NOT EXISTS idx_contract_backups_status ON contract_backups(status);
       `,
     },
   ];

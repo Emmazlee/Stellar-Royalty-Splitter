@@ -91,11 +91,6 @@ import { reputationRouter } from "./routes/reputation.js";
 import { searchRouter } from "./routes/search.js";
 import { zkPrivacyRouter } from "./routes/zk-privacy.js";
 import { stripeRouter } from "./routes/payments/stripe.js";
-import { schedulesRouter, batchRouter } from "./routes/schedules.js";
-import { identityRouter } from "./routes/identity.js";
-import { backupRouter } from "./routes/backup.js";
-import { startDistributionScheduler } from "./services/distribution-scheduler.js";
-import { startBackupScheduler } from "./services/contract-backup.js";
 
 // Initialize database on startup
 initializeDatabase();
