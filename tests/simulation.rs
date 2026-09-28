@@ -16,7 +16,6 @@
  *  4. Systematic Resource Scaling:
  *     Measures CPU instructions and memory byte cost across varying collaborator sizes.
  */
-
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token::{Client as TokenClient, StellarAssetClient},
@@ -249,15 +248,27 @@ fn test_simulate_high_frequency_1000_distributions() {
 
     let token_client = TokenClient::new(&env, &token);
     assert_eq!(token_client.balance(&contract_id), 0);
-    assert_eq!(token_client.balance(&a), (amount_per_op * (num_operations as i128)) * 5000 / 10000);
+    assert_eq!(
+        token_client.balance(&a),
+        (amount_per_op * (num_operations as i128)) * 5000 / 10000
+    );
 
     std::println!("\n=======================================================");
     std::println!("  HIGH-FREQUENCY SIMULATION SUMMARY (1000 OPERATIONS)");
     std::println!("=======================================================");
     std::println!("  Total Operations:         {}", num_operations);
-    std::println!("  Total Wall-Clock Time:    {:.3} seconds", elapsed.as_secs_f64());
-    std::println!("  Throughput:               {:.1} operations/sec", throughput_ops_sec);
-    std::println!("  Average CPU Cost/Op:      {} instructions", avg_cpu_per_op);
+    std::println!(
+        "  Total Wall-Clock Time:    {:.3} seconds",
+        elapsed.as_secs_f64()
+    );
+    std::println!(
+        "  Throughput:               {:.1} operations/sec",
+        throughput_ops_sec
+    );
+    std::println!(
+        "  Average CPU Cost/Op:      {} instructions",
+        avg_cpu_per_op
+    );
     std::println!("  Total CPU Instructions:   {}", total_cpu);
     std::println!("  Total Memory Bytes:       {}", total_mem);
     std::println!("=======================================================\n");
@@ -293,7 +304,13 @@ fn test_measure_resource_scaling_by_collaborator_count() {
 
         for _ in 0..count {
             collaborators.push_back(Address::generate(&env));
-            let s = share_each + if remainder > 0 { remainder -= 1; 1 } else { 0 };
+            let s = share_each
+                + if remainder > 0 {
+                    remainder -= 1;
+                    1
+                } else {
+                    0
+                };
             shares.push_back(s);
         }
 
