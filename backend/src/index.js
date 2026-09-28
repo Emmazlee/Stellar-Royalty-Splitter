@@ -91,6 +91,7 @@ import { reputationRouter } from "./routes/reputation.js";
 import { searchRouter } from "./routes/search.js";
 import { zkPrivacyRouter } from "./routes/zk-privacy.js";
 import { stripeRouter } from "./routes/payments/stripe.js";
+import { swapAggregatorRouter } from "./routes/swap-aggregator.js";
 
 // Initialize database on startup
 initializeDatabase();
@@ -99,6 +100,11 @@ initializeSigningKey();
 // Connect the distributed (Redis) cache layer when REDIS_URL is configured.
 // No-op when unset; never throws (#926).
 initRedisCache();
+
+// Start advanced multi-layer cache warming (#970)
+import { startL1WarmingScheduler, startL2WarmingScheduler } from "./cache-advanced.js";
+const l1WarmingInterval = startL1WarmingScheduler();
+const l2WarmingInterval = startL2WarmingScheduler();
 
 // Keep the searchable log store bounded without requiring a separate worker.
 // `unref` means this maintenance timer cannot keep tests or graceful shutdowns alive.
@@ -474,6 +480,10 @@ app.use("/api/v1/search", searchRouter);
 // Zero-knowledge proof privacy system (#972)
 app.use("/api/v1/zk-privacy", zkPrivacyRouter);
 
+// Token swap aggregator (#974)
+app.use("/api/v1/swap", readLimiter);
+app.use("/api/v1/swap", swapAggregatorRouter);
+
 // Admin operations (separate from /api/v1; protected by ADMIN_ROTATE_TOKEN)
 const RATE_LIMIT_ADMIN_WINDOW_MS = 60_000;
 const adminLimiter = rateLimit({
@@ -512,11 +522,11 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 async function startServer() {
-  // GraphQL API (#809)
-  await setupGraphQL(app, "/api/v1/graphql");
-
   const PORT = process.env.PORT ?? 3001;
   const server = app.listen(PORT, () => logger.info(`API listening on http://localhost:${PORT}`));
+
+  // GraphQL API with subscriptions (#809, #969)
+  await setupGraphQL(app, "/api/v1/graphql", server);
 
   // Initialize WebSocket for real-time notifications (#594)
   const wss = initializeWebSocket(server);
@@ -596,6 +606,12 @@ async function startServer() {
         auditTrailVerifier.stop();
       }
       closeAuditTrail();
+      if (l1WarmingInterval) {
+        clearInterval(l1WarmingInterval);
+      }
+      if (l2WarmingInterval) {
+        clearInterval(l2WarmingInterval);
+      }
     },
   });
 
