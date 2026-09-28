@@ -77,6 +77,7 @@ import { auditTrailRouter } from "./routes/audit-trail.js";
 import { startAuditTrailVerifier, closeAuditTrail } from "./services/audit-trail.js";
 import { setSecondaryRoyaltyPoolSource } from "./metrics.js";
 import { httpMetricsMiddleware } from "./middleware/http-metrics.js";
+import { responseTimeMiddleware } from "./middleware/response-time.js";
 import { createTrafficShadowMiddleware } from "./middleware/traffic-shadow.js";
 import { getPendingRoyaltyPools } from "./database/secondary-royalties.js";
 import { initRedisCache } from "./cache.js";
@@ -89,6 +90,7 @@ import { sendgridWebhookRouter } from "./routes/webhooks/sendgrid.js";
 import { reputationRouter } from "./routes/reputation.js";
 import { searchRouter } from "./routes/search.js";
 import { zkPrivacyRouter } from "./routes/zk-privacy.js";
+import { stripeRouter } from "./routes/payments/stripe.js";
 
 // Initialize database on startup
 initializeDatabase();
@@ -144,6 +146,9 @@ app.use((req, res, next) => {
     next();
   });
 });
+
+// HTTP response time tracking, APM metrics, X-Response-Time header, and P95 latency alerts (#985)
+app.use(responseTimeMiddleware());
 
 // HTTP request count + latency histograms (#935), also the canary's health signal (#936)
 app.use(httpMetricsMiddleware);

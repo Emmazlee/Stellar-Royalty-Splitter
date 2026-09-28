@@ -399,6 +399,17 @@ export {
   getZKPrivacyStatistics,
 } from "./zk-privacy.js";
 
+// Query optimizer & batching utilities (#984)
+export {
+  explainQueryPlan,
+  batchGetContributorStatus,
+  batchGetTransactionDetails,
+  batchGetDisputeComments,
+  batchGetCollaboratorReputation,
+  refreshEarningsSummaryMV,
+  getOptimizedEarningsSummary,
+} from "../services/query-optimizer.js";
+
 // Default export for backwards compatibility
 import { db } from "./core.js";
 export default db;
