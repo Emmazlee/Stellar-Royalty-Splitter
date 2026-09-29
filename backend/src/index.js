@@ -52,6 +52,8 @@ import { isEmailConfigured } from "./email/email-service.js";
 import { rankingRouter } from "./routes/ranking.js";
 import { docsRouter } from "./routes/docs.js";
 import { tiersRouter } from "./routes/tiers.js";
+import { pluginsRouter } from "./routes/plugins.js";
+import { loadAllPlugins, startHotReload } from "./plugins/plugin-loader.js";
 import { attachRole } from "./middleware/rbac.js";
 import { csvImportRouter } from "./routes/csv-import.js";
 import { quickbooksRouter } from "./routes/accounting/quickbooks.js";
@@ -107,10 +109,15 @@ initializeSigningKey();
 // No-op when unset; never throws (#926).
 initRedisCache();
 
-// Start advanced multi-layer cache warming (#970)
-import { startL1WarmingScheduler, startL2WarmingScheduler } from "./cache-advanced.js";
-const l1WarmingInterval = startL1WarmingScheduler();
-const l2WarmingInterval = startL2WarmingScheduler();
+// Load plugins from backend/plugins/ and start hot-reload watcher (#998).
+// loadAllPlugins() is async but we don't await it at module level — a
+// startup failure in any individual plugin must not prevent the server
+// from starting. startHotReload() is synchronous and unref()'d internally.
+loadAllPlugins().catch((err) => {
+  // Should never reach here (loadAllPlugins is fail-open), but guard anyway.
+  console.error("[plugins] loadAllPlugins threw unexpectedly:", err?.message);
+});
+startHotReload();
 
 // Keep the searchable log store bounded without requiring a separate worker.
 // `unref` means this maintenance timer cannot keep tests or graceful shutdowns alive.
@@ -418,6 +425,9 @@ app.use("/api/v1/ranking", rankingRouter);
 
 // Contributor tiers (#589)
 app.use("/api/v1/tiers", tiersRouter);
+
+// Plugin management (#998)
+app.use("/api/v1/plugins", pluginsRouter);
 
 // API documentation (#587)
 app.use("/api/docs", docsRouter);
