@@ -107,6 +107,7 @@ import { backupRouter } from "./routes/backup.js";
 import { startDistributionScheduler } from "./services/distribution-scheduler.js";
 import { startBackupScheduler } from "./services/contract-backup.js";
 import { rightsRouter } from "./routes/rights-management.js";
+import { treasuryRouter } from "./routes/treasury/index.js";
 
 
 
@@ -531,6 +532,10 @@ app.use("/api/v1/backup", backupRouter);
 // Rights Management System
 app.use("/api/v1/rights", writeLimiter);
 app.use("/api/v1/rights", rightsRouter);
+
+// DAO Treasury Management (#1076)
+app.use("/api/v1/treasury", writeLimiter);
+app.use("/api/v1/treasury", treasuryRouter);
 
 
 // Admin operations (separate from /api/v1; protected by ADMIN_ROTATE_TOKEN)
