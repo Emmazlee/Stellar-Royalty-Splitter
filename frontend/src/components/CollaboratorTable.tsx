@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useRef, useCallback, useMemo } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 
 import { api } from "../api";
 import { queryClient } from "../lib/queryClient";
@@ -485,13 +485,13 @@ export default function CollaboratorTable({ contractId, refreshKey }: Props) {
             className={`collab-sort-btn${sort === "address" ? " collab-sort-btn--active" : ""}`}
             onClick={() => setSort("address")}
           >
-            AÔÇôZ
+            A–Z
           </button>
           <button
             className={`collab-sort-btn${sort === "share" ? " collab-sort-btn--active" : ""}`}
             onClick={() => setSort("share")}
           >
-            Share Ôåô
+            Share ↓
           </button>
         </div>
 
