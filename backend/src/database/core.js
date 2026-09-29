@@ -1,4 +1,4 @@
-import Database from "better-sqlite3";
+﻿import Database from "better-sqlite3";
 import path from "path";
 import { fileURLToPath } from "url";
 import logger from "../logger.js";
@@ -329,7 +329,7 @@ export function initializeDatabase() {
         `,
     },
     {
-      // #939: Salesforce CRM integration — OAuth connections, collaborator ⇄
+      // #939: Salesforce CRM integration ÔÇö OAuth connections, collaborator Ôçä
       // Contact mappings, sync progress, and the CRM activity audit trail.
       // `contributor_status` is also created here (IF NOT EXISTS) because the
       // inbound Salesforce webhook flips collaborator status and the table was
@@ -424,7 +424,7 @@ export function initializeDatabase() {
         `,
     },
     {
-      // #924: Stripe fiat payout integration — linked Connect accounts and
+      // #924: Stripe fiat payout integration ÔÇö linked Connect accounts and
       // payout records (status tracked pending -> completed/failed via the
       // Stripe webhook).
       version: 16,
@@ -482,7 +482,7 @@ export function initializeDatabase() {
     {
       version: 17,
       sql: `
-        -- Marketplace webhook integrations — OpenSea (#928) and Rarible (#954).
+        -- Marketplace webhook integrations ÔÇö OpenSea (#928) and Rarible (#954).
         --
         -- src/database/marketplace-events.js talks to src/database/core.js, but
         -- marketplace_events / marketplace_settings were never part of this
@@ -517,7 +517,7 @@ export function initializeDatabase() {
         -- database/secondary-royalties.js (recordSecondarySale) and the audit
         -- entry through database/audit.js (addAuditLog). Both tables are
         -- currently defined only in the legacy src/database.js schema, which
-        -- the app no longer initialises, so they are created here too —
+        -- the app no longer initialises, so they are created here too ÔÇö
         -- IF NOT EXISTS keeps this compatible with databases that already
         -- have them from that schema.
         CREATE TABLE IF NOT EXISTS secondary_sales (
@@ -554,7 +554,7 @@ export function initializeDatabase() {
       `,
     },
     {
-      // #950: Tax compliance reporting — 1099-NEC, T4A, EU-VAT form storage.
+      // #950: Tax compliance reporting ÔÇö 1099-NEC, T4A, EU-VAT form storage.
       version: 18,
       sql: `
         CREATE TABLE IF NOT EXISTS tax_forms (
