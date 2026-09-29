@@ -530,3 +530,29 @@ export {
   getDisputesForRightRecord,
 } from "./rights-schema.js";
 
+// Document Management System (#1060)
+export {
+  initializeDocumentTables,
+  generateDocumentId,
+  recordDocumentAudit,
+  insertDocument,
+  insertDocumentVersion,
+  getDocumentById,
+  updateDocument,
+  listDocuments,
+  getDocumentVersions,
+  getDocumentVersion,
+  setCollaboratorPermission,
+  revokeCollaboratorPermission,
+  getDocumentPermissions,
+  getUserPermission,
+  requestSignatures,
+  recordSignature,
+  rejectSignature,
+  getDocumentSignatures,
+  getDocumentAuditTrail,
+  exportDocumentAuditTrail,
+  resetDocumentDatabase,
+} from "./document-manager.js";
+
+

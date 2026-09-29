@@ -107,6 +107,8 @@ import { backupRouter } from "./routes/backup.js";
 import { startDistributionScheduler } from "./services/distribution-scheduler.js";
 import { startBackupScheduler } from "./services/contract-backup.js";
 import { rightsRouter } from "./routes/rights-management.js";
+import { crossChainRouter } from "./routes/cross-chain.js";
+import { documentManagerRouter } from "./routes/document-manager.js";
 
 
 
@@ -532,6 +534,9 @@ app.use("/api/v1/backup", backupRouter);
 app.use("/api/v1/rights", writeLimiter);
 app.use("/api/v1/rights", rightsRouter);
 
+// Document Management System with IPFS (#1060)
+app.use("/api/v1/documents", documentManagerRouter);
+
 
 // Admin operations (separate from /api/v1; protected by ADMIN_ROTATE_TOKEN)
 const RATE_LIMIT_ADMIN_WINDOW_MS = 60_000;
@@ -572,6 +577,8 @@ app.use(errorHandler);
 
 async function startServer() {
   const PORT = process.env.PORT ?? 3001;
+  let l1WarmingInterval = null;
+  let l2WarmingInterval = null;
   const server = app.listen(PORT, () => logger.info(`API listening on http://localhost:${PORT}`));
 
   // GraphQL API with subscriptions (#809, #969)
