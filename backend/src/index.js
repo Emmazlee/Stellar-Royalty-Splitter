@@ -71,6 +71,7 @@ import { createMetricsPusher } from "./metrics-pushgateway.js";
 import { transactionFinalityRouter } from "./routes/transaction-finality.js";
 import { startFinalityCleanupScheduler } from "./jobs/finality-cleanup-job.js";
 import { startPaymentScheduleJob } from "./jobs/payment-schedule-job.js";
+import { startEditSessionCleanup } from "./jobs/edit-session-cleanup.js";
 import { setupGraphQL } from "./graphql.js";
 import { requestComplexityMiddleware } from "./request-complexity.js";
 import { auditTrailRouter } from "./routes/audit-trail.js";
@@ -92,6 +93,10 @@ import { reputationRouter } from "./routes/reputation.js";
 import { searchRouter } from "./routes/search.js";
 import { zkPrivacyRouter } from "./routes/zk-privacy.js";
 import { stripeRouter } from "./routes/payments/stripe.js";
+import { collaborativeEditorRouter } from "./routes/collaborative-editor.js";
+import { vestingRouter } from "./routes/vesting.js";
+import { oracleRouter } from "./routes/oracle.js";
+import { auditEnhancedRouter } from "./routes/audit-enhanced.js";
 import { swapAggregatorRouter } from "./routes/swap-aggregator.js";
 
 // Initialize database on startup

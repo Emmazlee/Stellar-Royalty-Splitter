@@ -410,6 +410,60 @@ export {
   getOptimizedEarningsSummary,
 } from "../services/query-optimizer.js";
 
+// Real-time collaborative contract editor (#959)
+export {
+  createEditSession,
+  extendEditSession,
+  releaseEditSession,
+  getActiveEditSessions,
+  recordContractEdit,
+  getContractEditHistory,
+  applyOperationalTransform,
+  getFieldVersion,
+  cleanupExpiredSessions,
+} from "./collaborative-editor.js";
+
+// Dynamic royalty oracle with ML predictions (#960)
+export {
+  storePrediction,
+  getLatestPrediction,
+  getPredictionHistory,
+  storeModelMetadata,
+  getLatestModelMetadata,
+  getModelMetadata,
+  storeMarketData,
+  getLatestMarketData,
+  getMarketDataHistory,
+  calculatePredictionAccuracy,
+  getMarketTrends,
+} from "./oracle.js";
+
+// Time-locked vesting contracts (#983)
+export {
+  createVestingSchedule,
+  calculateVestedAmount,
+  releaseVestedTokens,
+  getVestingSchedule,
+  getVestingSchedulesByBeneficiary,
+  getVestingSchedulesByContract,
+  getVestingReleaseHistory,
+  getSchedulesWithReleasableTokens,
+  cancelVestingSchedule,
+  getVestingStatistics,
+} from "./vesting.js";
+
+// Enhanced audit logging with hash-chain (#986)
+export {
+  addAuditEntry,
+  verifyAuditChainIntegrity,
+  getAuditEntries,
+  getAuditStatistics,
+  exportAuditLogJSON,
+  exportAuditLogCSV,
+  getComplianceReport,
+  searchAuditLog,
+} from "./audit-enhanced.js";
+
 // Default export for backwards compatibility
 import { db } from "./core.js";
 export default db;
