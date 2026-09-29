@@ -1,5 +1,5 @@
-/**
- * Database module index — re-exports all database functions.
+﻿/**
+ * Database module index ÔÇö re-exports all database functions.
  * Provides backwards compatibility while organizing code into focused submodules.
  */
 
@@ -413,3 +413,42 @@ export {
 // Default export for backwards compatibility
 import { db } from "./core.js";
 export default db;
+
+// Contract backups and disaster recovery (#993)
+export {
+  getIsoWeek,
+  createBackupRecord,
+  markBackupUploading,
+  markBackupCompleted,
+  markBackupFailed,
+  recordDrillResult,
+  getBackupById,
+  listBackups,
+  countBackups,
+  getLatestBackup,
+  backupExistsForWeek,
+  getContractsWithBackups,
+  pruneOldBackups,
+} from "./backups.js";
+
+// Distribution schedules and batch execution (#991)
+export {
+  createSchedule,
+  getScheduleById,
+  listSchedulesByContract,
+  countSchedulesByContract,
+  updateSchedule,
+  deleteSchedule,
+  pauseSchedule,
+  resumeSchedule,
+  markScheduleRun,
+  getDueSchedules,
+  createBatchExecution,
+  markBatchRunning,
+  markBatchCompleted,
+  markBatchFailed,
+  recordBatchItem,
+  getBatchExecution,
+  listBatchExecutionsBySchedule,
+  listRecentBatchExecutions,
+} from "./schedules.js";

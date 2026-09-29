@@ -1,4 +1,4 @@
-// dotenv is optional - load .env file if needed
+﻿// dotenv is optional - load .env file if needed
 // import "dotenv/config";
 
 // OTel SDK must initialise before any other imports so auto-instrumentation
@@ -85,6 +85,7 @@ import { openseaRouter } from "./routes/marketplaces/opensea.js";
 import { raribleRouter } from "./routes/marketplaces/rarible.js";
 import { smsPreferencesRouter } from "./routes/notifications/sms.js";
 import { taxReportsRouter } from "./routes/tax/reports.js";
+import { complianceRouter } from "./routes/compliance.js";
 import { emailTemplatesRouter } from "./routes/communications/email-templates.js";
 import { sendgridWebhookRouter } from "./routes/webhooks/sendgrid.js";
 import { reputationRouter } from "./routes/reputation.js";
@@ -168,7 +169,7 @@ app.use(shutdownMiddleware);
 // Security headers
 app.use(helmet());
 
-// Distributed tracing — creates per-request OTel spans, injects X-Trace-Id and X-Correlation-Id
+// Distributed tracing ÔÇö creates per-request OTel spans, injects X-Trace-Id and X-Correlation-Id
 app.use(tracingMiddleware);
 // #766: gzip/deflate compress responses over 1KB (analytics payloads, CSV/JSON
 // exports, etc). Clients can opt out with `x-no-compression` for debugging.
@@ -307,9 +308,9 @@ app.use((req, _res, next) => {
   next();
 });
 
-// Global max request body size — configurable via env, defaults to prior hardcoded value.
+// Global max request body size ÔÇö configurable via env, defaults to prior hardcoded value.
 const MAX_REQUEST_BODY_SIZE = process.env.MAX_REQUEST_BODY_SIZE ?? "10kb";
-// `verify` stashes the raw request bytes on every request (cheap — the
+// `verify` stashes the raw request bytes on every request (cheap ÔÇö the
 // buffer is already in memory from parsing). Routes that need to verify an
 // HMAC signature over the exact bytes the sender signed (e.g.
 // routes/marketplaces/opensea.js) read req.rawBody instead of re-serializing
@@ -366,7 +367,7 @@ app.use("/api/v1/onboarding", writeLimiter);
 app.use("/api/v1/simulate", simulateLimiter);
 app.use("/api/v1/accounting", writeLimiter);
 
-// Apply read limiter to high-fan-out query endpoints (#394 — MEDIUM-16)
+// Apply read limiter to high-fan-out query endpoints (#394 ÔÇö MEDIUM-16)
 app.use("/api/v1/analytics", readLimiter);
 app.use("/api/v1/history", readLimiter);
 app.use("/api/v1/archive", readLimiter);
@@ -461,6 +462,9 @@ app.use("/api/v1/version", versionRouter);
 // Transaction finality tracking (#finality)
 app.use("/api/v1/transactions", transactionFinalityRouter);
 
+// Compliance and regulatory reporting (#997)
+app.use("/api/v1/compliance", complianceRouter);
+
 // OpenSea marketplace webhook integration (#928)
 app.use("/api/v1/marketplaces/opensea", writeLimiter);
 app.use("/api/v1/marketplaces/opensea", openseaRouter);
@@ -480,9 +484,18 @@ app.use("/api/v1/search", searchRouter);
 // Zero-knowledge proof privacy system (#972)
 app.use("/api/v1/zk-privacy", zkPrivacyRouter);
 
-// Token swap aggregator (#974)
-app.use("/api/v1/swap", readLimiter);
-app.use("/api/v1/swap", swapAggregatorRouter);
+// Batch payment scheduling (#991)
+app.use("/api/v1/schedules", writeLimiter);
+app.use("/api/v1/batch", writeLimiter);
+app.use("/api/v1/schedules", schedulesRouter);
+app.use("/api/v1/batch", batchRouter);
+
+// Web3 identity — ENS + Lens (#992)
+app.use("/api/v1/identity", identityRouter);
+
+// Contract backup and disaster recovery (#993)
+app.use("/api/v1/backup", writeLimiter);
+app.use("/api/v1/backup", backupRouter);
 
 // Admin operations (separate from /api/v1; protected by ADMIN_ROTATE_TOKEN)
 const RATE_LIMIT_ADMIN_WINDOW_MS = 60_000;
@@ -507,7 +520,7 @@ app.use("/admin", adminRouter);
 app.use("/admin/api-keys", adminLimiter);
 app.use("/admin/api-keys", adminApiKeysRouter);
 
-// Legacy /api/* redirect to /api/v1/* — routes under /api/v1/* are canonical
+// Legacy /api/* redirect to /api/v1/* ÔÇö routes under /api/v1/* are canonical
 app.use("/api", (req, res) => {
   res.set("Deprecation", "true");
   res.set("Link", `</api/v1${req.url}>; rel="successor-version"`);
@@ -518,7 +531,7 @@ app.use("/api", (req, res) => {
 // instead of Express's default HTML 404 page (#662).
 app.use(notFoundHandler);
 
-// Central error handler — must be mounted last.
+// Central error handler ÔÇö must be mounted last.
 app.use(errorHandler);
 
 async function startServer() {
@@ -542,6 +555,12 @@ async function startServer() {
 
   // Start the payment schedule job (#599)
   const paymentScheduleJob = startPaymentScheduleJob();
+
+  // Start the distribution scheduler (#991)
+  const distributionScheduler = startDistributionScheduler();
+
+  // Start the contract backup scheduler (#993)
+  const backupScheduler = startBackupScheduler();
 
   const metricsPusher = createMetricsPusher();
   metricsPusher.start();
@@ -597,6 +616,12 @@ async function startServer() {
       }
       if (finalityCleanupScheduler) {
         finalityCleanupScheduler.stop();
+      }
+      if (distributionScheduler) {
+        distributionScheduler.stop();
+      }
+      if (backupScheduler) {
+        backupScheduler.stop();
       }
       if (paymentScheduleJob) {
         paymentScheduleJob.stop();
