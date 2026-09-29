@@ -100,6 +100,13 @@ import { vestingRouter } from "./routes/vesting.js";
 import { oracleRouter } from "./routes/oracle.js";
 import { auditEnhancedRouter } from "./routes/audit-enhanced.js";
 import { swapAggregatorRouter } from "./routes/swap-aggregator.js";
+import { crossChainRouter } from "./routes/cross-chain.js";
+import { schedulesRouter } from "./routes/schedules.js";
+import { batchRouter } from "./routes/batch.js";
+import { identityRouter } from "./routes/identity.js";
+import { backupRouter } from "./routes/backup.js";
+import { startDistributionScheduler } from "./jobs/distribution-scheduler.js";
+import { startBackupScheduler } from "./jobs/backup-scheduler.js";
 
 // Initialize database on startup
 initializeDatabase();
@@ -504,6 +511,10 @@ app.use("/api/v1/schedules", writeLimiter);
 app.use("/api/v1/batch", writeLimiter);
 app.use("/api/v1/schedules", schedulesRouter);
 app.use("/api/v1/batch", batchRouter);
+
+// Cross-chain liquidity pool integration (#cross-chain)
+app.use("/api/v1/cross-chain", writeLimiter);
+app.use("/api/v1/cross-chain", crossChainRouter);
 
 // Web3 identity — ENS + Lens (#992)
 app.use("/api/v1/identity", identityRouter);
