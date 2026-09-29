@@ -26,6 +26,7 @@ import historyRouter from "./routes/history.js";
 import webhooksRouter from "./routes/webhooks.js";
 import { analyticsRouter } from "./routes/analytics.js";
 import { forecastRouter } from "./routes/analytics/forecast.js";
+import { forecastModelRouter } from "./routes/analytics/forecast-model.js";
 import { benchmarkingRouter } from "./routes/analytics/benchmarking.js";
 import { contractRouter } from "./routes/contract.js";
 import { healthRouter } from "./routes/health.js";
@@ -411,6 +412,9 @@ app.use("/api/v1", historyRouter);
 app.use("/api/v1", webhooksRouter);
 app.use("/api/v1/analytics/forecast", readLimiter);
 app.use("/api/v1/analytics/forecast", forecastRouter);
+// AI-powered earnings forecast with 30/60/90-day predictions (#1037)
+app.use("/api/v1/analytics/forecast-model", readLimiter);
+app.use("/api/v1/analytics/forecast-model", forecastModelRouter);
 app.use("/api/v1", analyticsRouter);
 // Collaborator performance benchmarking (#952)
 app.use("/api/v1/analytics/benchmarking", benchmarkingRouter);
