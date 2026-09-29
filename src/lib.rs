@@ -64,6 +64,21 @@ pub struct VestingSchedule {
     pub claimed_shares: u32,
 }
 
+/// A continuous token payment stream (#1054).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Stream {
+    pub id: u64,
+    pub token: Address,
+    pub payer: Address,
+    pub recipient: Address,
+    pub rate_per_second: i128,
+    pub accrued_amount: i128,
+    pub last_accrual: u64,
+    pub paused: bool,
+    pub stopped: bool,
+}
+
 /// One entry in the royalty rate change history (#323).
 #[contracttype]
 #[derive(Clone)]
@@ -395,6 +410,10 @@ pub enum ExtKey {
     GovProposalCount,
     /// #982 — Map of proposal votes per (proposal_id, voter) (persistent storage).
     GovProposalVotes,
+    /// #1054 — next stream identifier (instance storage).
+    StreamCount,
+    /// #1054 — continuous payment stream by identifier (persistent storage).
+    Stream(u64),
 }
 
 /// Maximum number of rate-change entries kept in history.
@@ -670,6 +689,25 @@ impl RoyaltySplitter {
     fn require_share_map(env: &Env) -> Result<Map<Address, u32>, ContractError> {
         storage::persistent_get::<Map<Address, u32>>(env, &StorageKey::ShareMap)
             .ok_or(ContractError::NoShareMap)
+    }
+
+    fn stream_or_error(env: &Env, stream_id: u64) -> Result<Stream, ContractError> {
+        storage::persistent_get(env, &StorageKey::Ext(ExtKey::Stream(stream_id)))
+            .ok_or(ContractError::NotInitialized)
+    }
+
+    fn accrue_stream(env: &Env, stream: &Stream) -> Result<i128, ContractError> {
+        if stream.paused || stream.stopped {
+            return Ok(stream.accrued_amount);
+        }
+        let elapsed = env.ledger().timestamp().saturating_sub(stream.last_accrual);
+        let earned = (elapsed as i128)
+            .checked_mul(stream.rate_per_second)
+            .ok_or(ContractError::ArithmeticOverflow)?;
+        stream
+            .accrued_amount
+            .checked_add(earned)
+            .ok_or(ContractError::ArithmeticOverflow)
     }
 
     fn checked_add_share_total(_env: &Env, total: u32, share: u32) -> Result<u32, ContractError> {
@@ -1991,6 +2029,146 @@ impl RoyaltySplitter {
             .instance()
             .get(&StorageKey::DistributeHistory)
             .unwrap_or(0)
+    }
+
+    /// Start a continuously accruing stream. The initial deposit is held by
+    /// this contract and claims are limited by its available token balance.
+    pub fn start_stream(
+        env: Env,
+        token: Address,
+        payer: Address,
+        recipient: Address,
+        rate_per_second: i128,
+        initial_deposit: i128,
+    ) -> Result<u64, ContractError> {
+        storage::extend_instance_ttl(&env);
+        payer.require_auth();
+        if rate_per_second <= 0 || initial_deposit <= 0 {
+            return Err(ContractError::AmountNotPositive);
+        }
+
+        let stream_id: u64 = env
+            .storage()
+            .instance()
+            .get(&StorageKey::Ext(ExtKey::StreamCount))
+            .unwrap_or(0);
+        token::Client::new(&env, &token).transfer(&payer, &env.current_contract_address(), &initial_deposit);
+        let stream = Stream {
+            id: stream_id,
+            token,
+            payer,
+            recipient,
+            rate_per_second,
+            accrued_amount: 0,
+            last_accrual: env.ledger().timestamp(),
+            paused: false,
+            stopped: false,
+        };
+        storage::persistent_set(&env, &StorageKey::Ext(ExtKey::Stream(stream_id)), &stream);
+        storage::instance_set(
+            &env,
+            &StorageKey::Ext(ExtKey::StreamCount),
+            &stream_id.saturating_add(1),
+        );
+        env.events().publish(
+            (symbol_short!("stream"), symbol_short!("started")),
+            (stream_id, stream.recipient, stream.rate_per_second),
+        );
+        Ok(stream_id)
+    }
+
+    pub fn get_stream(env: Env, stream_id: u64) -> Option<Stream> {
+        storage::extend_instance_ttl(&env);
+        storage::persistent_get(&env, &StorageKey::Ext(ExtKey::Stream(stream_id)))
+    }
+
+    pub fn get_stream_accrued(env: Env, stream_id: u64) -> Result<i128, ContractError> {
+        storage::extend_instance_ttl(&env);
+        let stream = Self::stream_or_error(&env, stream_id)?;
+        Self::accrue_stream(&env, &stream)
+    }
+
+    pub fn claim_stream(env: Env, stream_id: u64) -> Result<i128, ContractError> {
+        storage::extend_instance_ttl(&env);
+        let mut stream = Self::stream_or_error(&env, stream_id)?;
+        stream.recipient.require_auth();
+        let accrued = Self::accrue_stream(&env, &stream)?;
+        if accrued <= 0 {
+            return Err(ContractError::NoBalance);
+        }
+        let balance = token::Client::new(&env, &stream.token).balance(&env.current_contract_address());
+        let amount = accrued.min(balance);
+        if amount <= 0 {
+            return Err(ContractError::InsufficientBalance);
+        }
+        token::Client::new(&env, &stream.token).transfer(
+            &env.current_contract_address(),
+            &stream.recipient,
+            &amount,
+        );
+        stream.accrued_amount = accrued - amount;
+        stream.last_accrual = env.ledger().timestamp();
+        storage::persistent_set(&env, &StorageKey::Ext(ExtKey::Stream(stream_id)), &stream);
+        env.events().publish(
+            (symbol_short!("stream"), symbol_short!("claimed")),
+            (stream_id, stream.recipient, amount),
+        );
+        Ok(amount)
+    }
+
+    pub fn pause_stream(env: Env, stream_id: u64) -> Result<(), ContractError> {
+        Self::set_stream_paused(env, stream_id, true)
+    }
+
+    pub fn resume_stream(env: Env, stream_id: u64) -> Result<(), ContractError> {
+        Self::set_stream_paused(env, stream_id, false)
+    }
+
+    fn set_stream_paused(env: Env, stream_id: u64, paused: bool) -> Result<(), ContractError> {
+        storage::extend_instance_ttl(&env);
+        let mut stream = Self::stream_or_error(&env, stream_id)?;
+        stream.payer.require_auth();
+        if stream.stopped {
+            return Err(ContractError::ContractPaused);
+        }
+        stream.accrued_amount = Self::accrue_stream(&env, &stream)?;
+        stream.last_accrual = env.ledger().timestamp();
+        stream.paused = paused;
+        storage::persistent_set(&env, &StorageKey::Ext(ExtKey::Stream(stream_id)), &stream);
+        Ok(())
+    }
+
+    pub fn stop_stream(env: Env, stream_id: u64) -> Result<(), ContractError> {
+        storage::extend_instance_ttl(&env);
+        let mut stream = Self::stream_or_error(&env, stream_id)?;
+        stream.payer.require_auth();
+        stream.accrued_amount = Self::accrue_stream(&env, &stream)?;
+        stream.last_accrual = env.ledger().timestamp();
+        stream.stopped = true;
+        stream.paused = true;
+        storage::persistent_set(&env, &StorageKey::Ext(ExtKey::Stream(stream_id)), &stream);
+        Ok(())
+    }
+
+    pub fn update_stream_rate(
+        env: Env,
+        stream_id: u64,
+        rate_per_second: i128,
+    ) -> Result<(), ContractError> {
+        storage::extend_instance_ttl(&env);
+        if rate_per_second <= 0 {
+            return Err(ContractError::AmountNotPositive);
+        }
+        let mut stream = Self::stream_or_error(&env, stream_id)?;
+        stream.payer.require_auth();
+        if stream.stopped {
+            return Err(ContractError::ContractPaused);
+        }
+        stream.accrued_amount = Self::accrue_stream(&env, &stream)?;
+        stream.last_accrual = env.ledger().timestamp();
+        stream.rate_per_second = rate_per_second;
+        storage::persistent_set(&env, &StorageKey::Ext(ExtKey::Stream(stream_id)), &stream);
+        Ok(())
     }
 
     pub fn distribute(env: Env, token: Address) -> Result<(), ContractError> {
