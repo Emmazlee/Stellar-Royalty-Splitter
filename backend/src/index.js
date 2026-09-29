@@ -1,4 +1,4 @@
-﻿// dotenv is optional - load .env file if needed
+// dotenv is optional - load .env file if needed
 // import "dotenv/config";
 
 // OTel SDK must initialise before any other imports so auto-instrumentation
@@ -100,6 +100,14 @@ import { vestingRouter } from "./routes/vesting.js";
 import { oracleRouter } from "./routes/oracle.js";
 import { auditEnhancedRouter } from "./routes/audit-enhanced.js";
 import { swapAggregatorRouter } from "./routes/swap-aggregator.js";
+import { schedulesRouter, batchRouter } from "./routes/schedules.js";
+import { identityRouter } from "./routes/identity.js";
+import { backupRouter } from "./routes/backup.js";
+import { startDistributionScheduler } from "./services/distribution-scheduler.js";
+import { startBackupScheduler } from "./services/contract-backup.js";
+import { rightsRouter } from "./routes/rights-management.js";
+
+
 
 // Initialize database on startup
 initializeDatabase();
@@ -511,6 +519,11 @@ app.use("/api/v1/identity", identityRouter);
 // Contract backup and disaster recovery (#993)
 app.use("/api/v1/backup", writeLimiter);
 app.use("/api/v1/backup", backupRouter);
+
+// Rights Management System
+app.use("/api/v1/rights", writeLimiter);
+app.use("/api/v1/rights", rightsRouter);
+
 
 // Admin operations (separate from /api/v1; protected by ADMIN_ROTATE_TOKEN)
 const RATE_LIMIT_ADMIN_WINDOW_MS = 60_000;

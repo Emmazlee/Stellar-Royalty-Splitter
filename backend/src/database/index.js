@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Database module index ÔÇö re-exports all database functions.
  * Provides backwards compatibility while organizing code into focused submodules.
  */
@@ -506,3 +506,27 @@ export {
   listBatchExecutionsBySchedule,
   listRecentBatchExecutions,
 } from "./schedules.js";
+
+// Rights Management System
+export {
+  initializeRightsTables,
+  clearRightsTables,
+  createRightRecord,
+  getRightById,
+  getRightsByContract,
+  getRightsByOwner,
+  updateRightRecord,
+  deleteRightRecord,
+  upsertRightMetadataRecord,
+  getRightMetadataRecord,
+  createVerificationProofRecord,
+  getVerificationProofById,
+  getVerificationProofsRecord,
+  updateVerificationProofStatusRecord,
+  addRightHistoryRecord,
+  getRightHistoryRecord,
+  linkRightToDisputeRecord,
+  getRightsForDisputeRecord,
+  getDisputesForRightRecord,
+} from "./rights-schema.js";
+
