@@ -13,15 +13,18 @@
 
 import { render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";
+import { vi } from "vitest";
 import Web3Profile from "./Web3Profile";
 
 // ── Mock the identity service ─────────────────────────────────────────────────
 
-jest.mock("../services/web3-identity");
+vi.mock("../services/web3-identity", () => ({
+  resolveIdentity: vi.fn(),
+}));
 
 import { resolveIdentity, type Web3Identity } from "../services/web3-identity";
 
-const mockResolveIdentity = resolveIdentity as jest.Mock;
+const mockResolveIdentity = vi.mocked(resolveIdentity);
 
 // ── Test fixtures ─────────────────────────────────────────────────────────────
 
@@ -73,7 +76,7 @@ function setup(identity: Web3Identity) {
 }
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -87,10 +90,6 @@ describe("Web3Profile", () => {
 
     render(<Web3Profile address={ADDRESS} />);
 
-    const el = screen.getByRole("img", { hidden: true }) as HTMLElement | null
-      ?? screen.getByLabelText("Loading identity…");
-
-    // aria-busy element present
     expect(screen.getByLabelText("Loading identity…")).toBeInTheDocument();
   });
 
@@ -214,7 +213,7 @@ describe("Web3Profile", () => {
     render(<Web3Profile address={ADDRESS} size="md" />);
 
     await waitFor(() => {
-      const img = screen.getByRole("img") as HTMLImageElement;
+      const img = screen.getByRole("img", { hidden: true }) as HTMLImageElement;
       expect(img.src).toBe("https://cdn.example.com/avatar.png");
     });
   });
@@ -260,7 +259,7 @@ describe("Web3Profile", () => {
     render(<Web3Profile address={ADDRESS} size="md" />);
 
     await waitFor(() => {
-      const img = screen.getByRole("img") as HTMLImageElement;
+      const img = screen.getByRole("img", { hidden: true }) as HTMLImageElement;
       // Lens picture takes priority
       expect(img.src).toBe("https://cdn.example.com/avatar.png");
     });
