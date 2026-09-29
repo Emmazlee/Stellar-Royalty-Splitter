@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import "./Dashboard.css";
 import { useSettings } from "../context/SettingsContext";
 import { DashboardSkeleton } from "./Skeleton";
@@ -21,14 +21,14 @@ interface DashboardProps {
 }
 
 /**
- * Dashboard — analytics overview for a given contract. Orchestrates the
+ * Dashboard ÔÇö analytics overview for a given contract. Orchestrates the
  * DashboardHeader, MetricsGrid, EarningsChart, TopEarners, and CollaboratorList
  * sub-components around a single data fetch. Also renders the Portfolio
  * Overview (contract performance) section from the upstream enhancement.
  *
  * Data fetching is now handled by React Query hooks (#832):
- * - `useAnalytics` — per-contract analytics (deduplicates concurrent requests)
- * - `useContractPerformance` — portfolio-level performance summary
+ * - `useAnalytics` ÔÇö per-contract analytics (deduplicates concurrent requests)
+ * - `useContractPerformance` ÔÇö portfolio-level performance summary
  */
 export const Dashboard: React.FC<DashboardProps> = ({ contractId }) => {
   const { settings } = useSettings();
@@ -47,7 +47,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ contractId }) => {
 
   const activeDateRange = allTime ? undefined : dateRange;
 
-  // React Query hooks — automatically deduplicated, cached, and background-refetched
+  // React Query hooks ÔÇö automatically deduplicated, cached, and background-refetched
   const {
     data: analyticsResponse,
     isLoading: loading,
@@ -162,7 +162,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ contractId }) => {
     return (
       <div className="dashboard-empty">
         <div className="empty-state">
-          <div className="empty-icon">📊</div>
+          <div className="empty-icon">­ƒôè</div>
           <h2>No Contract Selected</h2>
           <p>Please initialize or select a contract to view analytics.</p>
         </div>
@@ -174,12 +174,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ contractId }) => {
 
   function formatContractId(id: string): string {
     if (id.length <= 16) return id;
-    return `${id.slice(0, 8)}…${id.slice(-6)}`;
+    return `${id.slice(0, 8)}ÔÇª${id.slice(-6)}`;
   }
 
   return (
     <div className="dashboard">
-      {/* ── Date range filter + refresh ───────────────────────────────── */}
+      {/* ÔöÇÔöÇ Date range filter + refresh ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */}
       <DashboardHeader
         allTime={allTime}
         dateRange={dateRange}
@@ -200,7 +200,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ contractId }) => {
       {error && <div className="error-message" role="alert">{error}</div>}
       {performanceError && <div className="error-message" role="alert">{performanceError}</div>}
 
-      {/* ── Portfolio Overview (contract performance) ─────────────────── */}
+      {/* ÔöÇÔöÇ Portfolio Overview (contract performance) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */}
       {performanceData && !performanceLoading && (
         <section className="dashboard-section" aria-labelledby="portfolio-overview-heading">
           <h2 id="portfolio-overview-heading" className="section-heading">
@@ -310,7 +310,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ contractId }) => {
                           <td className="text-right" data-label="Last Activity">
                             {contract.lastActivity
                               ? new Date(contract.lastActivity).toLocaleDateString()
-                              : "—"}
+                              : "ÔÇö"}
                           </td>
                           <td className="text-right" data-label="Status">
                             <span className={`status-pill status-${contract.status}`}>
@@ -333,7 +333,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ contractId }) => {
         </section>
       )}
 
-      {/* ── Per-contract analytics ────────────────────────────────────── */}
+      {/* ÔöÇÔöÇ Per-contract analytics ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ */}
       {stats && !loading && (
         <section className="dashboard-section" aria-labelledby="contract-analytics-heading">
           {stats.totalTransactions === 0 && (
