@@ -26,6 +26,7 @@ import historyRouter from "./routes/history.js";
 import webhooksRouter from "./routes/webhooks.js";
 import { analyticsRouter } from "./routes/analytics.js";
 import { forecastRouter } from "./routes/analytics/forecast.js";
+import { forecastModelRouter } from "./routes/analytics/forecast-model.js";
 import { benchmarkingRouter } from "./routes/analytics/benchmarking.js";
 import { contractRouter } from "./routes/contract.js";
 import { healthRouter } from "./routes/health.js";
@@ -52,6 +53,8 @@ import { isEmailConfigured } from "./email/email-service.js";
 import { rankingRouter } from "./routes/ranking.js";
 import { docsRouter } from "./routes/docs.js";
 import { tiersRouter } from "./routes/tiers.js";
+import { pluginsRouter } from "./routes/plugins.js";
+import { loadAllPlugins, startHotReload } from "./plugins/plugin-loader.js";
 import { attachRole } from "./middleware/rbac.js";
 import { csvImportRouter } from "./routes/csv-import.js";
 import { quickbooksRouter } from "./routes/accounting/quickbooks.js";
@@ -73,12 +76,14 @@ import { createMetricsPusher } from "./metrics-pushgateway.js";
 import { transactionFinalityRouter } from "./routes/transaction-finality.js";
 import { startFinalityCleanupScheduler } from "./jobs/finality-cleanup-job.js";
 import { startPaymentScheduleJob } from "./jobs/payment-schedule-job.js";
+import { startEditSessionCleanup } from "./jobs/edit-session-cleanup.js";
 import { setupGraphQL } from "./graphql.js";
 import { requestComplexityMiddleware } from "./request-complexity.js";
 import { auditTrailRouter } from "./routes/audit-trail.js";
 import { startAuditTrailVerifier, closeAuditTrail } from "./services/audit-trail.js";
 import { setSecondaryRoyaltyPoolSource } from "./metrics.js";
 import { httpMetricsMiddleware } from "./middleware/http-metrics.js";
+import { responseTimeMiddleware } from "./middleware/response-time.js";
 import { createTrafficShadowMiddleware } from "./middleware/traffic-shadow.js";
 import { getPendingRoyaltyPools } from "./database/secondary-royalties.js";
 import { initRedisCache } from "./cache.js";
@@ -86,11 +91,26 @@ import { openseaRouter } from "./routes/marketplaces/opensea.js";
 import { raribleRouter } from "./routes/marketplaces/rarible.js";
 import { smsPreferencesRouter } from "./routes/notifications/sms.js";
 import { taxReportsRouter } from "./routes/tax/reports.js";
+import { complianceRouter } from "./routes/compliance.js";
 import { emailTemplatesRouter } from "./routes/communications/email-templates.js";
 import { sendgridWebhookRouter } from "./routes/webhooks/sendgrid.js";
 import { reputationRouter } from "./routes/reputation.js";
 import { searchRouter } from "./routes/search.js";
 import { zkPrivacyRouter } from "./routes/zk-privacy.js";
+import { stripeRouter } from "./routes/payments/stripe.js";
+import { collaborativeEditorRouter } from "./routes/collaborative-editor.js";
+import { vestingRouter } from "./routes/vesting.js";
+import { oracleRouter } from "./routes/oracle.js";
+import { auditEnhancedRouter } from "./routes/audit-enhanced.js";
+import { swapAggregatorRouter } from "./routes/swap-aggregator.js";
+import { schedulesRouter, batchRouter } from "./routes/schedules.js";
+import { identityRouter } from "./routes/identity.js";
+import { backupRouter } from "./routes/backup.js";
+import { startDistributionScheduler } from "./services/distribution-scheduler.js";
+import { startBackupScheduler } from "./services/contract-backup.js";
+import { rightsRouter } from "./routes/rights-management.js";
+
+
 
 // Initialize database on startup
 initializeDatabase();
@@ -99,6 +119,16 @@ initializeSigningKey();
 // Connect the distributed (Redis) cache layer when REDIS_URL is configured.
 // No-op when unset; never throws (#926).
 initRedisCache();
+
+// Load plugins from backend/plugins/ and start hot-reload watcher (#998).
+// loadAllPlugins() is async but we don't await it at module level — a
+// startup failure in any individual plugin must not prevent the server
+// from starting. startHotReload() is synchronous and unref()'d internally.
+loadAllPlugins().catch((err) => {
+  // Should never reach here (loadAllPlugins is fail-open), but guard anyway.
+  console.error("[plugins] loadAllPlugins threw unexpectedly:", err?.message);
+});
+startHotReload();
 
 // Keep the searchable log store bounded without requiring a separate worker.
 // `unref` means this maintenance timer cannot keep tests or graceful shutdowns alive.
@@ -147,6 +177,9 @@ app.use((req, res, next) => {
   });
 });
 
+// HTTP response time tracking, APM metrics, X-Response-Time header, and P95 latency alerts (#985)
+app.use(responseTimeMiddleware());
+
 // HTTP request count + latency histograms (#935), also the canary's health signal (#936)
 app.use(httpMetricsMiddleware);
 
@@ -159,7 +192,7 @@ app.use(shutdownMiddleware);
 // Security headers
 app.use(helmet());
 
-// Distributed tracing — creates per-request OTel spans, injects X-Trace-Id and X-Correlation-Id
+// Distributed tracing ÔÇö creates per-request OTel spans, injects X-Trace-Id and X-Correlation-Id
 app.use(tracingMiddleware);
 // #766: gzip/deflate compress responses over 1KB (analytics payloads, CSV/JSON
 // exports, etc). Clients can opt out with `x-no-compression` for debugging.
@@ -298,9 +331,9 @@ app.use((req, _res, next) => {
   next();
 });
 
-// Global max request body size — configurable via env, defaults to prior hardcoded value.
+// Global max request body size ÔÇö configurable via env, defaults to prior hardcoded value.
 const MAX_REQUEST_BODY_SIZE = process.env.MAX_REQUEST_BODY_SIZE ?? "10kb";
-// `verify` stashes the raw request bytes on every request (cheap — the
+// `verify` stashes the raw request bytes on every request (cheap ÔÇö the
 // buffer is already in memory from parsing). Routes that need to verify an
 // HMAC signature over the exact bytes the sender signed (e.g.
 // routes/marketplaces/opensea.js) read req.rawBody instead of re-serializing
@@ -357,7 +390,7 @@ app.use("/api/v1/onboarding", writeLimiter);
 app.use("/api/v1/simulate", simulateLimiter);
 app.use("/api/v1/accounting", writeLimiter);
 
-// Apply read limiter to high-fan-out query endpoints (#394 — MEDIUM-16)
+// Apply read limiter to high-fan-out query endpoints (#394 ÔÇö MEDIUM-16)
 app.use("/api/v1/analytics", readLimiter);
 app.use("/api/v1/history", readLimiter);
 app.use("/api/v1/archive", readLimiter);
@@ -381,6 +414,9 @@ app.use("/api/v1", historyRouter);
 app.use("/api/v1", webhooksRouter);
 app.use("/api/v1/analytics/forecast", readLimiter);
 app.use("/api/v1/analytics/forecast", forecastRouter);
+// AI-powered earnings forecast with 30/60/90-day predictions (#1037)
+app.use("/api/v1/analytics/forecast-model", readLimiter);
+app.use("/api/v1/analytics/forecast-model", forecastModelRouter);
 app.use("/api/v1", analyticsRouter);
 // Collaborator performance benchmarking (#952)
 app.use("/api/v1/analytics/benchmarking", benchmarkingRouter);
@@ -403,6 +439,9 @@ app.use("/api/v1/ranking", rankingRouter);
 
 // Contributor tiers (#589)
 app.use("/api/v1/tiers", tiersRouter);
+
+// Plugin management (#998)
+app.use("/api/v1/plugins", pluginsRouter);
 
 // API documentation (#587)
 app.use("/api/docs", docsRouter);
@@ -452,6 +491,9 @@ app.use("/api/v1/version", versionRouter);
 // Transaction finality tracking (#finality)
 app.use("/api/v1/transactions", transactionFinalityRouter);
 
+// Compliance and regulatory reporting (#997)
+app.use("/api/v1/compliance", complianceRouter);
+
 // OpenSea marketplace webhook integration (#928)
 app.use("/api/v1/marketplaces/opensea", writeLimiter);
 app.use("/api/v1/marketplaces/opensea", openseaRouter);
@@ -470,6 +512,28 @@ app.use("/api/v1/search", searchRouter);
 
 // Zero-knowledge proof privacy system (#972)
 app.use("/api/v1/zk-privacy", zkPrivacyRouter);
+
+// Batch payment scheduling (#991)
+app.use("/api/v1/schedules", writeLimiter);
+app.use("/api/v1/batch", writeLimiter);
+app.use("/api/v1/schedules", schedulesRouter);
+app.use("/api/v1/batch", batchRouter);
+
+// Cross-chain liquidity pool integration (#cross-chain)
+app.use("/api/v1/cross-chain", writeLimiter);
+app.use("/api/v1/cross-chain", crossChainRouter);
+
+// Web3 identity — ENS + Lens (#992)
+app.use("/api/v1/identity", identityRouter);
+
+// Contract backup and disaster recovery (#993)
+app.use("/api/v1/backup", writeLimiter);
+app.use("/api/v1/backup", backupRouter);
+
+// Rights Management System
+app.use("/api/v1/rights", writeLimiter);
+app.use("/api/v1/rights", rightsRouter);
+
 
 // Admin operations (separate from /api/v1; protected by ADMIN_ROTATE_TOKEN)
 const RATE_LIMIT_ADMIN_WINDOW_MS = 60_000;
@@ -508,15 +572,15 @@ app.use("/api", (req, res) => {
 // instead of Express's default HTML 404 page (#662).
 app.use(notFoundHandler);
 
-// Central error handler — must be mounted last.
+// Central error handler ÔÇö must be mounted last.
 app.use(errorHandler);
 
 async function startServer() {
-  // GraphQL API (#809)
-  await setupGraphQL(app, "/api/v1/graphql");
-
   const PORT = process.env.PORT ?? 3001;
   const server = app.listen(PORT, () => logger.info(`API listening on http://localhost:${PORT}`));
+
+  // GraphQL API with subscriptions (#809, #969)
+  await setupGraphQL(app, "/api/v1/graphql", server);
 
   // Initialize WebSocket for real-time notifications (#594)
   const wss = initializeWebSocket(server);
@@ -532,6 +596,12 @@ async function startServer() {
 
   // Start the payment schedule job (#599)
   const paymentScheduleJob = startPaymentScheduleJob();
+
+  // Start the distribution scheduler (#991)
+  const distributionScheduler = startDistributionScheduler();
+
+  // Start the contract backup scheduler (#993)
+  const backupScheduler = startBackupScheduler();
 
   const metricsPusher = createMetricsPusher();
   metricsPusher.start();
@@ -588,6 +658,12 @@ async function startServer() {
       if (finalityCleanupScheduler) {
         finalityCleanupScheduler.stop();
       }
+      if (distributionScheduler) {
+        distributionScheduler.stop();
+      }
+      if (backupScheduler) {
+        backupScheduler.stop();
+      }
       if (paymentScheduleJob) {
         paymentScheduleJob.stop();
       }
@@ -596,6 +672,12 @@ async function startServer() {
         auditTrailVerifier.stop();
       }
       closeAuditTrail();
+      if (l1WarmingInterval) {
+        clearInterval(l1WarmingInterval);
+      }
+      if (l2WarmingInterval) {
+        clearInterval(l2WarmingInterval);
+      }
     },
   });
 
