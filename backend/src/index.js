@@ -513,6 +513,10 @@ app.use("/api/v1/batch", writeLimiter);
 app.use("/api/v1/schedules", schedulesRouter);
 app.use("/api/v1/batch", batchRouter);
 
+// Cross-chain liquidity pool integration (#cross-chain)
+app.use("/api/v1/cross-chain", writeLimiter);
+app.use("/api/v1/cross-chain", crossChainRouter);
+
 // Web3 identity — ENS + Lens (#992)
 app.use("/api/v1/identity", identityRouter);
 
