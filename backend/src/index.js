@@ -1,3 +1,4 @@
+
 // dotenv is optional - load .env file if needed
 // import "dotenv/config";
 
@@ -107,6 +108,7 @@ import { backupRouter } from "./routes/backup.js";
 import { startDistributionScheduler } from "./services/distribution-scheduler.js";
 import { startBackupScheduler } from "./services/contract-backup.js";
 import { rightsRouter } from "./routes/rights-management.js";
+import { apiVersioningMiddleware, deprecationTrackingMiddleware } from "./middleware/api-versioning.js";
 
 
 
@@ -186,6 +188,10 @@ app.use(createTrafficShadowMiddleware());
 
 // Reject new incoming requests during graceful shutdown (#701)
 app.use(shutdownMiddleware);
+
+// API version negotiation, deprecation headers, and legacy-format transforms.
+// Must run before routes so every versioned response carries X-API-Version.
+app.use(apiVersioningMiddleware());
 
 // Security headers
 app.use(helmet());
@@ -320,6 +326,9 @@ const simulateLimiter = rateLimit({
 
 app.use(generalLimiter);
 
+// Log deprecated-version usage for partner migration tracking (#api-versioning).
+app.use(deprecationTrackingMiddleware());
+
 // #608: Track per-API-key request counts for the rate-limit dashboard.
 // Only records authenticated (keyed) requests that were not blocked by the
 // limiter above (blocked requests are recorded in the limiter's handler).
@@ -348,6 +357,12 @@ app.use(
 // Attach X-API-Version header to all versioned responses
 app.use("/api/v1", (_req, res, next) => {
   res.set("X-API-Version", "v1");
+  next();
+});
+
+// Attach X-API-Version header to all versioned responses (v1, v2, v3).
+app.use("/api", (_req, res, next) => {
+  res.set("X-API-Version", res.get("X-API-Version") || "v3");
   next();
 });
 
@@ -532,6 +547,13 @@ app.use("/api/v1/backup", backupRouter);
 app.use("/api/v1/rights", writeLimiter);
 app.use("/api/v1/rights", rightsRouter);
 
+// Legacy v1/v2 route trees. Requests to /api/v1/* and /api/v2/* are
+// transformed into the current (v3) internal format by the compatibility
+// layer, and responses are re-serialized back to the requested version.
+app.use("/api/v1", legacyV1Router);
+app.use("/api/v2", legacyV2Router);
+app.use("/api/v3", currentV3Router);
+
 
 // Admin operations (separate from /api/v1; protected by ADMIN_ROTATE_TOKEN)
 const RATE_LIMIT_ADMIN_WINDOW_MS = 60_000;
@@ -559,8 +581,9 @@ app.use("/admin/api-keys", adminApiKeysRouter);
 // Legacy /api/* redirect to /api/v1/* ÔÇö routes under /api/v1/* are canonical
 app.use("/api", (req, res) => {
   res.set("Deprecation", "true");
-  res.set("Link", `</api/v1${req.url}>; rel="successor-version"`);
-  res.redirect(308, `/api/v1${req.url}`);
+  res.set("Sunset", new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toUTCString());
+  res.set("Link", `</api/v3${req.url}>; rel="successor-version"`);
+  res.redirect(308, `/api/v3${req.url}`);
 });
 
 // Any request that didn't match a route above gets the standard error shape
@@ -576,6 +599,9 @@ async function startServer() {
 
   // GraphQL API with subscriptions (#809, #969)
   await setupGraphQL(app, "/api/v1/graphql", server);
+
+  // GraphQL is also exposed under the current version prefix (#api-versioning).
+  await setupGraphQL(app, "/api/v3/graphql", server);
 
   // Initialize WebSocket for real-time notifications (#594)
   const wss = initializeWebSocket(server);
@@ -672,6 +698,9 @@ async function startServer() {
       }
       if (l2WarmingInterval) {
         clearInterval(l2WarmingInterval);
+      }
+      if (typeof stopDeprecationTracking === "function") {
+        stopDeprecationTracking();
       }
     },
   });
