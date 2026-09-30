@@ -70,6 +70,8 @@ import { initializeWebSocket } from "./websocket.js";
 import { startSnapshotScheduler } from "./jobs/snapshot-job.js";
 import { startWebhookRetryScheduler } from "./jobs/retry-failed-webhooks.js";
 import { adminApiKeysRouter } from "./routes/admin-api-keys.js";
+import partnerApiRouter from "./routes/partner-api.js";
+import { apiKeyAuth, meterApiCall, partnerRateLimit } from "./middleware/api-key-auth.js";
 import { recordApiKeyRequest } from "./database/rate-limit.js";
 import { createMetricsPusher } from "./metrics-pushgateway.js";
 import { transactionFinalityRouter } from "./routes/transaction-finality.js";
@@ -108,13 +110,18 @@ import { backupRouter } from "./routes/backup.js";
 import { startDistributionScheduler } from "./services/distribution-scheduler.js";
 import { startBackupScheduler } from "./services/contract-backup.js";
 import { rightsRouter } from "./routes/rights-management.js";
-import { apiVersioningMiddleware, deprecationTrackingMiddleware } from "./middleware/api-versioning.js";
+import { treasuryRouter } from "./routes/treasury/index.js";
 
 
 
 // Initialize database on startup
 initializeDatabase();
 initializeSigningKey();
+
+// Advanced API rate limiting and traffic shaping (#traffic-shaping).
+// Token-bucket per endpoint, endpoint prioritization, and backpressure.
+const trafficShaper = createTrafficShaperMiddleware();
+const capacityPlanner = createCapacityPlanner();
 
 // Connect the distributed (Redis) cache layer when REDIS_URL is configured.
 // No-op when unset; never throws (#926).
@@ -183,15 +190,19 @@ app.use(responseTimeMiddleware());
 // HTTP request count + latency histograms (#935), also the canary's health signal (#936)
 app.use(httpMetricsMiddleware);
 
+// Advanced traffic shaping: token bucket per endpoint, prioritization, and
+// backpressure (429 + Retry-After, cached-data degradation) (#traffic-shaping).
+app.use(trafficShaper);
+
 // Mirror safe requests to the canary when SHADOW_TARGET_URL is set (#936)
 app.use(createTrafficShadowMiddleware());
 
 // Reject new incoming requests during graceful shutdown (#701)
 app.use(shutdownMiddleware);
 
-// API version negotiation, deprecation headers, and legacy-format transforms.
-// Must run before routes so every versioned response carries X-API-Version.
-app.use(apiVersioningMiddleware());
+// Capacity planning: sample load, alert above 80% capacity, emit scale
+// recommendations (#traffic-shaping).
+app.use(capacityPlanner.middleware());
 
 // Security headers
 app.use(helmet());
@@ -547,12 +558,9 @@ app.use("/api/v1/backup", backupRouter);
 app.use("/api/v1/rights", writeLimiter);
 app.use("/api/v1/rights", rightsRouter);
 
-// Legacy v1/v2 route trees. Requests to /api/v1/* and /api/v2/* are
-// transformed into the current (v3) internal format by the compatibility
-// layer, and responses are re-serialized back to the requested version.
-app.use("/api/v1", legacyV1Router);
-app.use("/api/v2", legacyV2Router);
-app.use("/api/v3", currentV3Router);
+// DAO Treasury Management (#1076)
+app.use("/api/v1/treasury", writeLimiter);
+app.use("/api/v1/treasury", treasuryRouter);
 
 
 // Admin operations (separate from /api/v1; protected by ADMIN_ROTATE_TOKEN)
@@ -578,7 +586,10 @@ app.use("/admin", adminRouter);
 app.use("/admin/api-keys", adminLimiter);
 app.use("/admin/api-keys", adminApiKeysRouter);
 
-// Legacy /api/* redirect to /api/v1/* ÔÇö routes under /api/v1/* are canonical
+// Partner API with metering and rate limiting (#996)
+app.use("/api/v1/partner", apiKeyAuth(), meterApiCall(), partnerRateLimit(), partnerApiRouter);
+
+// Legacy /api/* redirect to /api/v1/* — routes under /api/v1/* are canonical
 app.use("/api", (req, res) => {
   res.set("Deprecation", "true");
   res.set("Sunset", new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toUTCString());
@@ -595,6 +606,8 @@ app.use(errorHandler);
 
 async function startServer() {
   const PORT = process.env.PORT ?? 3001;
+  let l1WarmingInterval = null;
+  let l2WarmingInterval = null;
   const server = app.listen(PORT, () => logger.info(`API listening on http://localhost:${PORT}`));
 
   // GraphQL API with subscriptions (#809, #969)
@@ -632,6 +645,9 @@ async function startServer() {
 
   // #938: periodic hash-chain verification + retention enforcement.
   const auditTrailVerifier = startAuditTrailVerifier();
+
+  // Start capacity planning monitor (#traffic-shaping).
+  capacityPlanner.start();
 
   // Start weekly email digest scheduler if email is configured
   let digestInterval = null;
@@ -689,6 +705,7 @@ async function startServer() {
         paymentScheduleJob.stop();
       }
       metricsPusher.stop();
+      capacityPlanner.stop();
       if (auditTrailVerifier) {
         auditTrailVerifier.stop();
       }
