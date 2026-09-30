@@ -583,6 +583,8 @@ app.use(errorHandler);
 
 async function startServer() {
   const PORT = process.env.PORT ?? 3001;
+  let l1WarmingInterval = null;
+  let l2WarmingInterval = null;
   const server = app.listen(PORT, () => logger.info(`API listening on http://localhost:${PORT}`));
 
   // GraphQL API with subscriptions (#809, #969)
