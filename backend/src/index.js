@@ -69,6 +69,8 @@ import { initializeWebSocket } from "./websocket.js";
 import { startSnapshotScheduler } from "./jobs/snapshot-job.js";
 import { startWebhookRetryScheduler } from "./jobs/retry-failed-webhooks.js";
 import { adminApiKeysRouter } from "./routes/admin-api-keys.js";
+import partnerApiRouter from "./routes/partner-api.js";
+import { apiKeyAuth, meterApiCall, partnerRateLimit } from "./middleware/api-key-auth.js";
 import { recordApiKeyRequest } from "./database/rate-limit.js";
 import { createMetricsPusher } from "./metrics-pushgateway.js";
 import { transactionFinalityRouter } from "./routes/transaction-finality.js";
@@ -561,7 +563,10 @@ app.use("/admin", adminRouter);
 app.use("/admin/api-keys", adminLimiter);
 app.use("/admin/api-keys", adminApiKeysRouter);
 
-// Legacy /api/* redirect to /api/v1/* ÔÇö routes under /api/v1/* are canonical
+// Partner API with metering and rate limiting (#996)
+app.use("/api/v1/partner", apiKeyAuth(), meterApiCall(), partnerRateLimit(), partnerApiRouter);
+
+// Legacy /api/* redirect to /api/v1/* — routes under /api/v1/* are canonical
 app.use("/api", (req, res) => {
   res.set("Deprecation", "true");
   res.set("Link", `</api/v1${req.url}>; rel="successor-version"`);
