@@ -22,6 +22,13 @@ const metrics = {
   rpcRetryAttempts: 0,
   rpcRetrySuccesses: 0,
   rpcRetryExhausted: 0,
+  // Traffic shaping & capacity planning (#rate-limiting)
+  trafficShapedTotal: 0,
+  trafficShapingQueuedTotal: 0,
+  trafficShapingRejectedTotal: 0,
+  trafficShapingDegradedTotal: 0,
+  capacityPeakLoadPercent: 0,
+  capacityAlertsTotal: 0,
   // Connection health monitoring (#496)
   connectionHealthTotalChecks: 0,
   connectionHealthTotalFailures: 0,
@@ -99,6 +106,69 @@ const rateLimitHits = new client.Counter({
   name: "stellar_rate_limit_hits_total",
   help: "Total rate limit hits",
   labelNames: ["dimension"],
+  registers: [register],
+});
+
+// ── Traffic shaping & capacity planning metrics ────────────────────────────
+
+const trafficShaped = new client.Counter({
+  name: "stellar_traffic_shaped_total",
+  help: "Requests evaluated by the traffic shaper, by endpoint priority",
+  labelNames: ["priority", "endpoint"],
+  registers: [register],
+});
+
+const trafficShapingQueued = new client.Counter({
+  name: "stellar_traffic_shaping_queued_total",
+  help: "Requests queued for backpressure handling",
+  labelNames: ["priority"],
+  registers: [register],
+});
+
+const trafficShapingRejected = new client.Counter({
+  name: "stellar_traffic_shaping_rejected_total",
+  help: "Requests rejected with 429 due to traffic shaping",
+  labelNames: ["priority", "endpoint"],
+  registers: [register],
+});
+
+const trafficShapingDegraded = new client.Counter({
+  name: "stellar_traffic_shaping_degraded_total",
+  help: "Requests served with degraded (cached) responses under load",
+  labelNames: ["endpoint"],
+  registers: [register],
+});
+
+const trafficShapingQueueDepth = new client.Gauge({
+  name: "stellar_traffic_shaping_queue_depth",
+  help: "Current number of requests waiting in the backpressure queue",
+  labelNames: ["priority"],
+  registers: [register],
+});
+
+const capacityLoadPercent = new client.Gauge({
+  name: "stellar_capacity_load_percent",
+  help: "Current estimated system load as a percentage of capacity",
+  registers: [register],
+});
+
+const capacityPeakLoadPercent = new client.Gauge({
+  name: "stellar_capacity_peak_load_percent",
+  help: "Observed peak system load as a percentage of capacity",
+  registers: [register],
+});
+
+const capacityAlerts = new client.Counter({
+  name: "stellar_capacity_alerts_total",
+  help: "Capacity alerts triggered when load exceeded the configured threshold",
+  labelNames: ["severity"],
+  registers: [register],
+});
+
+const capacityScaleRecommendations = new client.Counter({
+  name: "stellar_capacity_scale_recommendations_total",
+  help: "Scale recommendations emitted by the capacity planner",
+  labelNames: ["direction"],
   registers: [register],
 });
 
@@ -270,6 +340,47 @@ const auditTrailWriteFailures = new client.Counter({
   help: "State changes that could not be appended to the immutable audit trail",
   registers: [register],
 });
+
+// Traffic shaping & capacity planning helpers
+export function recordTrafficShaped(priority, endpoint) {
+  metrics.trafficShapedTotal += 1;
+  trafficShaped.inc({ priority: priority || "standard", endpoint: endpoint || "unknown" });
+}
+
+export function recordTrafficQueued(priority) {
+  metrics.trafficShapingQueuedTotal += 1;
+  trafficShapingQueued.inc({ priority: priority || "standard" });
+}
+
+export function recordTrafficRejected(priority, endpoint) {
+  metrics.trafficShapingRejectedTotal += 1;
+  trafficShapingRejected.inc({ priority: priority || "standard", endpoint: endpoint || "unknown" });
+}
+
+export function recordTrafficDegraded(endpoint) {
+  metrics.trafficShapingDegradedTotal += 1;
+  trafficShapingDegraded.inc({ endpoint: endpoint || "unknown" });
+}
+
+export function setTrafficQueueDepth(priority, depth) {
+  trafficShapingQueueDepth.set({ priority: priority || "standard" }, Number(depth) || 0);
+}
+
+export function setCapacityLoad(percent) {
+  const value = Number.isFinite(percent) ? percent : 0;
+  metrics.capacityPeakLoadPercent = Math.max(metrics.capacityPeakLoadPercent, value);
+  capacityLoadPercent.set(value);
+  capacityPeakLoadPercent.set(metrics.capacityPeakLoadPercent);
+}
+
+export function recordCapacityAlert(severity) {
+  metrics.capacityAlertsTotal += 1;
+  capacityAlerts.inc({ severity: severity || "warning" });
+}
+
+export function recordScaleRecommendation(direction) {
+  capacityScaleRecommendations.inc({ direction: direction || "none" });
+}
 
 // Alerting constants
 const ALERT_WINDOW_MS = 5 * 60 * 1000;

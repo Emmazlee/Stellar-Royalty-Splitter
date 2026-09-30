@@ -118,6 +118,11 @@ import { treasuryRouter } from "./routes/treasury/index.js";
 initializeDatabase();
 initializeSigningKey();
 
+// Advanced API rate limiting and traffic shaping (#traffic-shaping).
+// Token-bucket per endpoint, endpoint prioritization, and backpressure.
+const trafficShaper = createTrafficShaperMiddleware();
+const capacityPlanner = createCapacityPlanner();
+
 // Connect the distributed (Redis) cache layer when REDIS_URL is configured.
 // No-op when unset; never throws (#926).
 initRedisCache();
@@ -185,11 +190,19 @@ app.use(responseTimeMiddleware());
 // HTTP request count + latency histograms (#935), also the canary's health signal (#936)
 app.use(httpMetricsMiddleware);
 
+// Advanced traffic shaping: token bucket per endpoint, prioritization, and
+// backpressure (429 + Retry-After, cached-data degradation) (#traffic-shaping).
+app.use(trafficShaper);
+
 // Mirror safe requests to the canary when SHADOW_TARGET_URL is set (#936)
 app.use(createTrafficShadowMiddleware());
 
 // Reject new incoming requests during graceful shutdown (#701)
 app.use(shutdownMiddleware);
+
+// Capacity planning: sample load, alert above 80% capacity, emit scale
+// recommendations (#traffic-shaping).
+app.use(capacityPlanner.middleware());
 
 // Security headers
 app.use(helmet());
@@ -620,6 +633,9 @@ async function startServer() {
   // #938: periodic hash-chain verification + retention enforcement.
   const auditTrailVerifier = startAuditTrailVerifier();
 
+  // Start capacity planning monitor (#traffic-shaping).
+  capacityPlanner.start();
+
   // Start weekly email digest scheduler if email is configured
   let digestInterval = null;
   if (isEmailConfigured()) {
@@ -676,6 +692,7 @@ async function startServer() {
         paymentScheduleJob.stop();
       }
       metricsPusher.stop();
+      capacityPlanner.stop();
       if (auditTrailVerifier) {
         auditTrailVerifier.stop();
       }
