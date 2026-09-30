@@ -530,29 +530,27 @@ export {
   getDisputesForRightRecord,
 } from "./rights-schema.js";
 
-// Document Management System (#1060)
+// DAO Treasury Management (#1076)
 export {
-  initializeDocumentTables,
-  generateDocumentId,
-  recordDocumentAudit,
-  insertDocument,
-  insertDocumentVersion,
-  getDocumentById,
-  updateDocument,
-  listDocuments,
-  getDocumentVersions,
-  getDocumentVersion,
-  setCollaboratorPermission,
-  revokeCollaboratorPermission,
-  getDocumentPermissions,
-  getUserPermission,
-  requestSignatures,
-  recordSignature,
-  rejectSignature,
-  getDocumentSignatures,
-  getDocumentAuditTrail,
-  exportDocumentAuditTrail,
-  resetDocumentDatabase,
-} from "./document-manager.js";
-
+  initializeTreasuryTables,
+  clearTreasuryTables,
+  createCategoryRecord,
+  getCategoryById,
+  getCategoryByName,
+  listCategories,
+  updateCategoryRecord,
+  deleteCategoryRecord,
+  createAllocationRecord,
+  getAllocationById,
+  listAllocations,
+  createExpenseRecord,
+  getExpenseById,
+  listExpenses as listTreasuryExpenseRecords,
+  updateExpenseRecord,
+  deleteExpenseRecord,
+  createApprovalRecord,
+  listApprovalsByExpense,
+  createReceiptRecord,
+  listReceiptsByExpense,
+} from "./treasury-schema.js";
 

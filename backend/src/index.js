@@ -1,3 +1,4 @@
+
 // dotenv is optional - load .env file if needed
 // import "dotenv/config";
 
@@ -69,6 +70,8 @@ import { initializeWebSocket } from "./websocket.js";
 import { startSnapshotScheduler } from "./jobs/snapshot-job.js";
 import { startWebhookRetryScheduler } from "./jobs/retry-failed-webhooks.js";
 import { adminApiKeysRouter } from "./routes/admin-api-keys.js";
+import partnerApiRouter from "./routes/partner-api.js";
+import { apiKeyAuth, meterApiCall, partnerRateLimit } from "./middleware/api-key-auth.js";
 import { recordApiKeyRequest } from "./database/rate-limit.js";
 import { createMetricsPusher } from "./metrics-pushgateway.js";
 import { transactionFinalityRouter } from "./routes/transaction-finality.js";
@@ -107,8 +110,7 @@ import { backupRouter } from "./routes/backup.js";
 import { startDistributionScheduler } from "./services/distribution-scheduler.js";
 import { startBackupScheduler } from "./services/contract-backup.js";
 import { rightsRouter } from "./routes/rights-management.js";
-import { crossChainRouter } from "./routes/cross-chain.js";
-import { documentManagerRouter } from "./routes/document-manager.js";
+import { treasuryRouter } from "./routes/treasury/index.js";
 
 
 
@@ -534,8 +536,9 @@ app.use("/api/v1/backup", backupRouter);
 app.use("/api/v1/rights", writeLimiter);
 app.use("/api/v1/rights", rightsRouter);
 
-// Document Management System with IPFS (#1060)
-app.use("/api/v1/documents", documentManagerRouter);
+// DAO Treasury Management (#1076)
+app.use("/api/v1/treasury", writeLimiter);
+app.use("/api/v1/treasury", treasuryRouter);
 
 
 // Admin operations (separate from /api/v1; protected by ADMIN_ROTATE_TOKEN)
@@ -561,7 +564,10 @@ app.use("/admin", adminRouter);
 app.use("/admin/api-keys", adminLimiter);
 app.use("/admin/api-keys", adminApiKeysRouter);
 
-// Legacy /api/* redirect to /api/v1/* ÔÇö routes under /api/v1/* are canonical
+// Partner API with metering and rate limiting (#996)
+app.use("/api/v1/partner", apiKeyAuth(), meterApiCall(), partnerRateLimit(), partnerApiRouter);
+
+// Legacy /api/* redirect to /api/v1/* — routes under /api/v1/* are canonical
 app.use("/api", (req, res) => {
   res.set("Deprecation", "true");
   res.set("Link", `</api/v1${req.url}>; rel="successor-version"`);
